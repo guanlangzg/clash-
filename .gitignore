@@ -1,0 +1,6 @@
+# Local agent/tooling state, not project content
+.zcode/
+
+# Python bytecode from running the test suite
+__pycache__/
+*.pyc
