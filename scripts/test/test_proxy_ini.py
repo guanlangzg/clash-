@@ -1,6 +1,6 @@
 """Offline checks for this project's Subconverter groups and node names.
 
-The NODES fixture mirrors the current 14 live subscription names, with the
+The NODES fixture mirrors the current 16 live subscription names, with the
 random UUID suffixes redacted to a synthetic marker. Names keep their family
 prefix, body markers and the flag-emoji prefix the provider puts on regional
 names, which is what the node-level selectors must match on. Since the
@@ -11,7 +11,6 @@ Set MIHOMO_BIN to additionally validate a credential-free group projection.
 That projection does not replace conversion with the user's Subconverter.
 """
 
-import base64
 import json
 import os
 from pathlib import Path
@@ -37,18 +36,20 @@ NODES = (
     "🇯🇵 绿云 IIJ-日本-流媒体-解锁-vm-ws-deadbeef-dead-beef-dead-beefdeadbeef",
     "🇺🇸 racknerd-us-解锁-vless",
     "🇺🇸 racknerd-us-解锁-cdn",
+    "🇯🇵 cheaphost-日本-流媒体-解锁-cdn",
+    "🇸🇬 三网优化SG伪家宽-解锁-cdn",
 )
 US_NODES = (NODES[0], NODES[1], NODES[12], NODES[13])
 HK_NODES = (NODES[2], NODES[3], NODES[4], NODES[5])
 NL_NODES = (NODES[6], NODES[7])
-JP_NODES = (NODES[8], NODES[10], NODES[11])
-SG_NODES = (NODES[9],)
+JP_NODES = (NODES[8], NODES[10], NODES[11], NODES[14])
+SG_NODES = (NODES[9], NODES[15])
 VMWS_NODES = (NODES[2], NODES[3], NODES[4], NODES[5], NODES[6], NODES[7], NODES[11])
 REALITY_NODES = (NODES[10],)
 NATIVE_NODES = (NODES[0], NODES[1])
 STREAMING_NODES = (NODES[0], NODES[1], NODES[8], NODES[9], NODES[10], NODES[11],
-                   NODES[12], NODES[13])
-CDN_NODES = (NODES[1], NODES[3], NODES[5], NODES[7], NODES[13])
+                   NODES[12], NODES[13], NODES[14], NODES[15])
+CDN_NODES = (NODES[1], NODES[3], NODES[5], NODES[7], NODES[13], NODES[14], NODES[15])
 NON_CDN_NODES = (NODES[0], NODES[2], NODES[4], NODES[6], NODES[8], NODES[9],
                  NODES[10], NODES[11], NODES[12])
 BUILTINS = {"DIRECT", "REJECT"}
@@ -342,13 +343,14 @@ class ProxyIniTests(unittest.TestCase):
             "proxy-groups": projected,
             "rules": ["MATCH,🐟 漏网之鱼"],
         }
-        encoded = base64.b64encode(
-            json.dumps(config, ensure_ascii=False).encode("utf-8")
-        ).decode("ascii")
-        # -t only parses; loopback stand-ins never dial the supplied VMess endpoints.
+        # Windows argv caps near 32KB, so hand mihomo a temp file instead of an
+        # inline -config argument once the roster grew past 14 nodes.
         with tempfile.TemporaryDirectory(prefix="proxy-ini-check-") as directory:
+            config_path = os.path.join(directory, "config.json")
+            with open(config_path, "w", encoding="utf-8") as handle:
+                handle.write(json.dumps(config, ensure_ascii=False))
             result = subprocess.run(
-                [MIHOMO_BIN, "-t", "-d", directory, "-config", encoded],
+                [MIHOMO_BIN, "-t", "-d", directory, "-f", config_path],
                 capture_output=True, encoding="utf-8", errors="replace", timeout=30,
             )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)

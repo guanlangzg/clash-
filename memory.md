@@ -36,7 +36,7 @@
 - 分组引用存在不代表其中有节点。官方 Subconverter 默认区分名称大小写，无 provider 的空 Clash 分组会补 `DIRECT`；需测试实际名称的匹配结果与默认路径。来源固定在 https://github.com/tindy2013/subconverter/blob/a0d4eab28cb8b6c782d4ce5c3a918de4829b4a72/src/generator/config/subexport.cpp#L643-L654 。
 - 基础回归命令：`py -3 -B scripts/test/test_proxy_ini.py`，仅使用名称 fixture，无凭据、无网络。Python Launcher 不可用时改为 `python -B scripts/test/test_proxy_ini.py`。
 - 可选内核校验：在 PowerShell 设置 `$env:MIHOMO_BIN = 'D:\Program Files\Clash Verge\verge-mihomo.exe'` 后运行上述测试；该路径来自本机进程检查，迁移设备后必须重新确认。未设置时明确跳过内核校验。
-- 内核测试用 `-t -config` 和独立临时目录，传入无凭据、回环地址占位节点的分组投影，只检查分组结构；不启动代理、不加载真实客户端配置。它不能代替实际 Subconverter 输出、完整规则源、VMess 参数、业务连通性或出口地区验证。
+- 内核测试用 `-t -f <临时文件>` 和独立临时目录，传入无凭据、回环地址占位节点的分组投影，只检查分组结构；内联 `-config` 参数在 roster 超过 14 条后会撞 Windows 约 32KB 命令行上限（WinError 206），必须走文件。它不能代替实际 Subconverter 输出、完整规则源、VMess 参数、业务连通性或出口地区验证。
 - 用 JSON 作为 YAML 兼容输入时，非 BMP 字符应直接输出为 UTF-8（Python `json.dumps(..., ensure_ascii=False)`），避免将组名中的字符输出为 YAML 不支持的 UTF-16 代理对转义。
 - CDN 与非 CDN 入口是否共用出口、节点名中的地区与“解锁”是否真实，必须另行实测。手动选择仅避免由测速触发的换节点，不保证服务器出口 IP 不变。
 
@@ -139,6 +139,7 @@
 - **修复契约**：所有节点级选择器统一为 `^(?:[^\x00-\x7F]+\s*)?家族前缀`——可选非 ASCII 前缀（emoji 旗标为多字节 UTF-8，`[^\x00-\x7F]` 按字节也成立）+ 可选空白 + 家族整体锚定。`std::regex`（ECMAScript）与 Python `re` 对 `\x`、`\s`、`(?:)` 语义一致。HK 家族（hyhk-/xzhk-）当前无前缀，保持严格锚定作为对照；`racknerd-us` 已并入美国与全量 alternation，`ccus` 保留防回潮。
 - **诊断方法（订阅内容只在内存，不落盘、不回显查询参数、不发第三方）**：clash UA 拉取转换输出 → 解析 `proxies:`/`proxy-groups:` 的 name 清单（930KB 全量 YAML）→ 复用 `test_proxy_ini.py` 的 `parse_groups`/`candidates` 把真实名字对照本地正则，按组计数并找孤儿。通用 UA 也返回 YAML，原始 base64 节点列表无法通过 UA 观察；修复后验证标准：全部组计数正确且孤儿为 0（实测 全部14/港4/美4/荷2/日3/新1/家宽1/cdn5/非CDN9/vm-ws7/reality1/原生2/流媒体8）。
 - **限制**：修复需推送到 GitHub main 后转换服务才会用上新正则；本地验证时线上输出仍显示空组属预期。真实客户端刷新订阅后的分组显示、节点出口与 AI 业务可用性仍需用户实测。
+- **当晚续报（roster 16 条）**：供应商随后补回 `🇸🇬 三网优化SG伪家宽-解锁-cdn` 并新增 `🇯🇵 cheaphost-日本-流媒体-解锁-cdn`；两条在修复后的正则下**零改动自动接住**（cdn 7、日本 4、新加坡与家宽各 2、非CDN 9、全部 16），验证了"可选前缀 + 家族锚定"对新增同族节点的扩展性。夹具已同步 16 条；同名节点的 ps 字段肉眼解码易错（三网误读成"五网"），必须程序解码。
 
 **Why:** 转换短链掩盖了"正则匹配发生在哪个形态的名字上"；只看引用完整性会误判配置没坏，只有对照转换输出中各组实际成员才能定位锚定失效。
 
