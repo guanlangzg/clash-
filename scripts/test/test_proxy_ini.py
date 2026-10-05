@@ -261,15 +261,26 @@ class ProxyIniTests(unittest.TestCase):
 
     def test_ai_rules_are_deduplicated_and_ordered_before_other_services(self):
         ai_rules = [rule for rule in self.rules if rule.startswith("🤖 OpenAI,")]
-        self.assertEqual(
-            ai_rules,
-            [
-                "🤖 OpenAI,https://cdn.jsdelivr.net/gh/blackmatrix7/ios_rule_script@master/rule/Clash/OpenAI/OpenAI.list",
-                "🤖 OpenAI,https://cdn.jsdelivr.net/gh/blackmatrix7/ios_rule_script@master/rule/Clash/Claude/Claude.list",
-            ],
-        )
-        self.assertNotIn("challenges.cloudflare.com", "\\n".join(ai_rules))
-        self.assertNotIn("ACL4SSR/ACL4SSR@master/Clash/Ruleset/AI.list", "\\n".join(ai_rules))
+        expected = [
+            "🤖 OpenAI,https://cdn.jsdelivr.net/gh/blackmatrix7/ios_rule_script@master/rule/Clash/OpenAI/OpenAI.list",
+            "🤖 OpenAI,https://cdn.jsdelivr.net/gh/blackmatrix7/ios_rule_script@master/rule/Clash/Claude/Claude.list",
+            "🤖 OpenAI,[]DOMAIN,aistudio.google.com",
+            "🤖 OpenAI,[]DOMAIN,makersuite.google.com",
+            "🤖 OpenAI,[]DOMAIN,gemini.google.com",
+            "🤖 OpenAI,[]DOMAIN,generativelanguage.googleapis.com",
+            "🤖 OpenAI,[]DOMAIN,api.githubcopilot.com",
+            "🤖 OpenAI,[]DOMAIN,copilot-proxy.githubusercontent.com",
+            "🤖 OpenAI,[]DOMAIN,copilot.microsoft.com",
+            "🤖 OpenAI,[]DOMAIN,sydney.bing.com",
+            "🤖 OpenAI,[]DOMAIN-SUFFIX,perplexity.ai",
+            "🤖 OpenAI,[]DOMAIN-SUFFIX,x.ai",
+            "🤖 OpenAI,[]DOMAIN-SUFFIX,grok.com",
+        ]
+        self.assertEqual(ai_rules, expected)
+        self.assertNotIn("challenges.cloudflare.com", "\n".join(ai_rules))
+        self.assertNotIn("ACL4SSR/ACL4SSR@master/Clash/Ruleset/AI.list", "\n".join(ai_rules))
+        self.assertNotIn("rule/Clash/Gemini/Gemini.list", "\n".join(ai_rules))
+        self.assertNotIn("rule/Clash/Copilot/Copilot.list", "\n".join(ai_rules))
         ai_indices = [index for index, rule in enumerate(self.rules)
                       if rule.startswith("🤖 OpenAI,")]
         self.assertEqual(ai_indices, list(range(ai_indices[0], ai_indices[0] + len(ai_rules))))
@@ -279,6 +290,25 @@ class ProxyIniTests(unittest.TestCase):
                                             if rule.startswith("📲 电报消息,")))
         self.assertLess(ai_indices[-1], next(index for index, rule in enumerate(self.rules)
                                              if rule.startswith("🌍 国外媒体,")))
+
+    def test_ai_core_domains_are_explicitly_covered(self):
+        required = {
+            "aistudio.google.com": "DOMAIN",
+            "makersuite.google.com": "DOMAIN",
+            "gemini.google.com": "DOMAIN",
+            "generativelanguage.googleapis.com": "DOMAIN",
+            "api.githubcopilot.com": "DOMAIN",
+            "copilot-proxy.githubusercontent.com": "DOMAIN",
+            "copilot.microsoft.com": "DOMAIN",
+            "sydney.bing.com": "DOMAIN",
+            "perplexity.ai": "DOMAIN-SUFFIX",
+            "x.ai": "DOMAIN-SUFFIX",
+            "grok.com": "DOMAIN-SUFFIX",
+        }
+        for domain, rtype in required.items():
+            with self.subTest(domain=domain):
+                expected_rule = f"🤖 OpenAI,[]{rtype},{domain}"
+                self.assertIn(expected_rule, self.rules)
 
     @unittest.skipUnless(MIHOMO_BIN, "Set MIHOMO_BIN for offline kernel validation")
     def test_mihomo_accepts_credential_free_group_projection(self):

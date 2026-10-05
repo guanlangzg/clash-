@@ -113,3 +113,20 @@
 
 **How to apply:** 解码后先核对条数再解析；审计时同时算“覆盖（有无孤儿）”“互斥（划分是否真划分）”“冗余（候选集合是否恒等）”，并把 `MIHOMO_BIN` 内核校验、真实 Subconverter 转换、出口地区与解锁实测分别列为未验证项。
 
+## AI 规则扩展与第三方规则集防污染经验（2026-10-05）
+
+- **外部规则集的严重污染与劫持风险**：不能盲目引入第三方的分流列表文件：
+  - `blackmatrix7/Copilot.list` 混入了 `challenges.cloudflare.com`（违反本项目 challenges 不归入 AI 的约束）、`www.bing.com`（劫持 Bing 正常搜索）、`auth0.com`（劫持通用身份认证）、`stripe.com`（劫持全网支付）及 sentry/segment/launchdarkly 等大量非 AI 基础设施，挂入 AI 组会劫持全局流量；
+  - `blackmatrix7/Gemini.list` 混入了 `apis.google.com`（Google 基础服务底层通信）、`colab` 关键词及 `generativelanguage` 宽泛关键词，整份引入会破坏 `GoogleCN.list` 直连白名单并导致 Google 基础通信被误代理；
+  - `ACL4SSR/AI.list` 混合了大量第三方工具，并与已有的 `ProxyMedia.list` 严重重叠。
+- **扩展 AI 覆盖的最佳工程实践**：坚持“纯净专用源（OpenAI/Claude）+ 核心服务显式内联”方案。
+  - 核心服务缺失域（如 `aistudio.google.com` 为 Google AI Studio 实际 302 落点但在各分源均缺失；`api.githubcopilot.com`、`copilot-proxy.githubusercontent.com` 在 Copilot.list 中缺失；`perplexity.ai`、`x.ai`、`grok.com` 分源均缺失）统一在 `proxy.ini` 中用 Subconverter `[]` 语法显式内联；
+  - Google Gemini API 域必须严格使用精确 `[]DOMAIN,generativelanguage.googleapis.com`，严禁使用 `DOMAIN-KEYWORD`，杜绝关键词扩大化与误伤。
+- **离线测试契约与防御性断言**：
+  - 测试契约严格限定离线、无网络、无外部 `.list` 文件，不能在离线单测中编写需依赖远程规则正文首命中的模拟；必须基于 ini 文件的静态 AST/规则断言（断言关键内联规则包含、规则段连续性、先于国外媒体与社交）；
+  - 测试套件中对已知污染源必须增加防御性 `assertNotIn`（明确禁止 `challenges.cloudflare.com`、`AI.list`、`Gemini.list`、`Copilot.list` 被引入 AI 规则段）。
+
+**Why:** 第三方规则列表正文常混合通用基础设施和遥测分析，表面上覆盖了新 AI 服务，实际上极易引入隐蔽的全局认证、支付和搜索劫持。
+
+**How to apply:** 后续扩展分流规则时，必须先逐行核查远程正文与关键词，核心服务优先使用显式 `[]DOMAIN` / `[]DOMAIN-SUFFIX` 内联，并在 `test_proxy_ini.py` 中增加对应的防污染断言与显式覆盖检查。
+
