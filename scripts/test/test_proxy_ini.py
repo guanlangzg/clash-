@@ -1,5 +1,12 @@
 """Offline checks for this project's Subconverter groups and node names.
 
+The NODES fixture mirrors the current 13 subscription names with the
+per-node identifiers redacted: names keep their family prefix and body
+markers, which is all the selectors match on.
+The 14th node (vless) has no display name yet, so it cannot be matched by any
+family-prefix selector and is left out of the fixture until a family prefix is
+confirmed.
+
 Set MIHOMO_BIN to additionally validate a credential-free group projection.
 That projection does not replace conversion with the user's Subconverter.
 """
@@ -22,13 +29,25 @@ NODES = (
     "hyhk-vm-ws-cdn",
     "xzhk-vm-ws",
     "xzhk-vm-ws-cdn",
-    "ccus-原生解锁-vm-ws",
-    "ccus-原生解锁-vm-ws-cdn",
+    "NL-vm-ws-nl",
+    "NL-vm-ws-cdn",
+    "cheaphost-日本-流媒体-解锁-vm-ws-example",
+    "三网优化SG伪家宽-解锁-vm-ws-example-sg",
+    "绿云 IIJ-日本-流媒体-解锁-vm-ws-example-jp",
+    "三网优化SG伪家宽-解锁-vl-reality-vision-example-sg",
+    "绿云 IIJ-日本-流媒体-解锁-vl-reality-vision-example-jp",
 )
-US_NODES = (NODES[0], NODES[1], NODES[6], NODES[7])
+US_NODES = (NODES[0], NODES[1])
 HK_NODES = (NODES[2], NODES[3], NODES[4], NODES[5])
+NL_NODES = (NODES[6], NODES[7])
+JP_NODES = (NODES[8], NODES[10], NODES[12])
+SG_NODES = (NODES[9], NODES[11])
 CDN_NODES = (NODES[1], NODES[3], NODES[5], NODES[7])
+NON_CDN_NODES = (NODES[0], NODES[2], NODES[4], NODES[6], NODES[8],
+                 NODES[9], NODES[10], NODES[11], NODES[12])
 BUILTINS = {"DIRECT", "REJECT"}
+# The group section opens with this comment; the family-prefix contract lives there.
+GROUP_SECTION_COMMENT = "; ---------- 家族前缀约定 ----------"
 MIHOMO_BIN = os.environ.get("MIHOMO_BIN")
 
 
@@ -74,12 +93,12 @@ class ProxyIniTests(unittest.TestCase):
         cls.rules = [line.partition("=")[2] for line in cls.lines
                      if line.startswith("ruleset=")]
 
-    def test_automatic_selection_covers_all_eight_nodes(self):
+    def test_automatic_selection_covers_all_thirteen_nodes(self):
         group = self.groups["♻️ 自动选择"]
         self.assertEqual(group["type"], "url-test")
         self.assertEqual(candidates(group), list(NODES))
 
-    def test_manual_selection_groups_cover_all_eight_nodes(self):
+    def test_manual_selection_groups_cover_all_thirteen_nodes(self):
         names = ("🚀 全部节点", "🚀 手动切换1", "🚀 手动切换2", "🚀 手动切换3")
         for name in names:
             with self.subTest(group=name):
@@ -88,10 +107,15 @@ class ProxyIniTests(unittest.TestCase):
 
     def test_main_selection_exposes_manual_groups(self):
         selectors = self.groups["🚀 节点选择"]["selectors"]
-        for name in ("🚀 全部节点", "🚀 手动切换1", "🚀 手动切换2", "🚀 手动切换3"):
-            self.assertIn(f"[]{name}", selectors)
+        expected = ("♻️ 自动选择", "🛡️ 故障转移", "🚀 全部节点",
+                    "🚀 手动切换1", "🚀 手动切换2", "🚀 手动切换3")
+        expected += tuple(name for name in self.groups if name.endswith("-手动"))
+        for name in expected:
+            with self.subTest(group=name):
+                self.assertIn(f"[]{name}", selectors)
+        self.assertNotIn("[]🚀 节点选择", selectors)
 
-    def test_fallback_preserves_import_order_for_all_eight_nodes(self):
+    def test_fallback_preserves_import_order_for_all_thirteen_nodes(self):
         group = self.groups["🛡️ 故障转移"]
         self.assertEqual(group["type"], "fallback")
         self.assertEqual(candidates(group), list(NODES))
@@ -101,11 +125,38 @@ class ProxyIniTests(unittest.TestCase):
         expected = {
             "🇺🇲 美国节点": US_NODES,
             "🇭🇰 香港节点": HK_NODES,
+            "🇳🇱 荷兰节点": NL_NODES,
+            "🇯🇵 日本节点": JP_NODES,
+            "🇸🇬 新加坡节点": SG_NODES,
+            "🏡 家宽节点": SG_NODES,
             "cdn节点": CDN_NODES,
+            "🌐 非CDN后缀节点": NON_CDN_NODES,
         }
         for name, nodes in expected.items():
             with self.subTest(group=name):
                 self.assertEqual(candidates(self.groups[name]), list(nodes))
+
+    def test_cdn_and_non_cdn_groups_partition_the_named_nodes(self):
+        cdn = candidates(self.groups["cdn节点"])
+        non_cdn = candidates(self.groups["🌐 非CDN后缀节点"])
+        self.assertFalse(set(cdn) & set(non_cdn), "cdn and non-cdn overlap")
+        self.assertEqual(sorted(cdn + non_cdn), sorted(NODES))
+
+    def test_every_automatic_group_has_an_identical_manual_twin(self):
+        automatic = {name: group for name, group in self.groups.items()
+                     if group["type"] in ("url-test", "fallback")}
+        # 13 url-test groups plus the single fallback in the reviewed plan.
+        self.assertEqual(len(automatic), 14)
+        for name, group in automatic.items():
+            with self.subTest(group=name):
+                twin_name = f"{name}-手动"
+                self.assertIn(twin_name, self.groups)
+                twin = self.groups[twin_name]
+                self.assertEqual(twin["type"], "select")
+                self.assertEqual(twin["selectors"], group["selectors"])
+        manual_twins = [name for name in self.groups if name.endswith("-手动")]
+        self.assertEqual(sorted(manual_twins),
+                         sorted(f"{name}-手动" for name in automatic))
 
     def test_every_group_has_real_candidates(self):
         for name, group in self.groups.items():
@@ -117,7 +168,7 @@ class ProxyIniTests(unittest.TestCase):
             with self.subTest(group=name):
                 group = self.groups[name]
                 self.assertEqual(group["type"], "select")
-                self.assertEqual(candidates(group), list(US_NODES + HK_NODES))
+                self.assertEqual(candidates(group), list(NODES))
 
     def test_filters_do_not_include_unrelated_node_names(self):
         noise = ("other-us-01", "other-hk-cdn", "isusx-test", "notice", "JP-01")
@@ -159,6 +210,11 @@ class ProxyIniTests(unittest.TestCase):
         self.assertEqual(default_route("🎯 全球直连"), "DIRECT")
         self.assertEqual(default_route("🌏 国内媒体"), "DIRECT")
         self.assertEqual(default_route("📺 哔哩哔哩"), "DIRECT")
+
+    def test_group_section_documents_the_family_prefix_contract(self):
+        self.assertIn(GROUP_SECTION_COMMENT, self.lines)
+        body = "\n".join(self.lines)
+        self.assertIn("^(?:isus|ccus|hyhk|xzhk|NL|cheaphost-日本|绿云 IIJ-日本|三网优化SG伪家宽)-", body)
 
     def test_health_checks_use_https_and_valid_parameters(self):
         for name, group in self.groups.items():
