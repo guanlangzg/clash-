@@ -1,11 +1,11 @@
 """Offline checks for this project's Subconverter groups and node names.
 
-The NODES fixture mirrors the current 13 subscription names with the
-per-node identifiers redacted: names keep their family prefix and body
-markers, which is all the selectors match on.
-The 14th node (vless) has no display name yet, so it cannot be matched by any
-family-prefix selector and is left out of the fixture until a family prefix is
-confirmed.
+The NODES fixture mirrors the current 14 live subscription names, with the
+random UUID suffixes redacted to a synthetic marker. Names keep their family
+prefix, body markers and the flag-emoji prefix the provider puts on regional
+names, which is what the node-level selectors must match on. Since the
+2026-10-05 roster change every node-level regex tolerates an optional
+non-ASCII prefix before the family prefix.
 
 Set MIHOMO_BIN to additionally validate a credential-free group projection.
 That projection does not replace conversion with the user's Subconverter.
@@ -29,22 +29,28 @@ NODES = (
     "hyhk-vm-ws-cdn",
     "xzhk-vm-ws",
     "xzhk-vm-ws-cdn",
-    "NL-vm-ws-nl",
-    "NL-vm-ws-cdn",
-    "cheaphost-日本-流媒体-解锁-vm-ws-example",
-    "三网优化SG伪家宽-解锁-vm-ws-example-sg",
-    "绿云 IIJ-日本-流媒体-解锁-vm-ws-example-jp",
-    "三网优化SG伪家宽-解锁-vl-reality-vision-example-sg",
-    "绿云 IIJ-日本-流媒体-解锁-vl-reality-vision-example-jp",
+    "🇳🇱 NL-vm-ws-nl",
+    "🇳🇱 NL-vm-ws-cdn",
+    "🇯🇵 cheaphost-日本-流媒体-解锁",
+    "🇸🇬 三网优化SG伪家宽-解锁-vless",
+    "🇯🇵 绿云 IIJ-日本-流媒体-解锁-vl-reality-vision-deadbeef-dead-beef-dead-beefdeadbeef",
+    "🇯🇵 绿云 IIJ-日本-流媒体-解锁-vm-ws-deadbeef-dead-beef-dead-beefdeadbeef",
+    "🇺🇸 racknerd-us-解锁-vless",
+    "🇺🇸 racknerd-us-解锁-cdn",
 )
-US_NODES = (NODES[0], NODES[1])
+US_NODES = (NODES[0], NODES[1], NODES[12], NODES[13])
 HK_NODES = (NODES[2], NODES[3], NODES[4], NODES[5])
 NL_NODES = (NODES[6], NODES[7])
-JP_NODES = (NODES[8], NODES[10], NODES[12])
-SG_NODES = (NODES[9], NODES[11])
-CDN_NODES = (NODES[1], NODES[3], NODES[5], NODES[7])
-NON_CDN_NODES = (NODES[0], NODES[2], NODES[4], NODES[6], NODES[8],
-                 NODES[9], NODES[10], NODES[11], NODES[12])
+JP_NODES = (NODES[8], NODES[10], NODES[11])
+SG_NODES = (NODES[9],)
+VMWS_NODES = (NODES[2], NODES[3], NODES[4], NODES[5], NODES[6], NODES[7], NODES[11])
+REALITY_NODES = (NODES[10],)
+NATIVE_NODES = (NODES[0], NODES[1])
+STREAMING_NODES = (NODES[0], NODES[1], NODES[8], NODES[9], NODES[10], NODES[11],
+                   NODES[12], NODES[13])
+CDN_NODES = (NODES[1], NODES[3], NODES[5], NODES[7], NODES[13])
+NON_CDN_NODES = (NODES[0], NODES[2], NODES[4], NODES[6], NODES[8], NODES[9],
+                 NODES[10], NODES[11], NODES[12])
 BUILTINS = {"DIRECT", "REJECT"}
 # The group section opens with this comment; the family-prefix contract lives there.
 GROUP_SECTION_COMMENT = "; ---------- 家族前缀约定 ----------"
@@ -131,6 +137,10 @@ class ProxyIniTests(unittest.TestCase):
             "🏡 家宽节点": SG_NODES,
             "cdn节点": CDN_NODES,
             "🌐 非CDN后缀节点": NON_CDN_NODES,
+            "🔌 vm-ws 标记节点": VMWS_NODES,
+            "🔐 vl-reality 标记节点": REALITY_NODES,
+            "🧬 原生解锁节点": NATIVE_NODES,
+            "🎬 流媒体解锁节点": STREAMING_NODES,
         }
         for name, nodes in expected.items():
             with self.subTest(group=name):
@@ -171,7 +181,8 @@ class ProxyIniTests(unittest.TestCase):
                 self.assertEqual(candidates(group), list(NODES))
 
     def test_filters_do_not_include_unrelated_node_names(self):
-        noise = ("other-us-01", "other-hk-cdn", "isusx-test", "notice", "JP-01")
+        noise = ("other-us-01", "other-hk-cdn", "isusx-test", "notice", "JP-01",
+                 "🇭🇰 other-hk-cdn", "🇺🇸 fake-us-01")
         for name, group in self.groups.items():
             with self.subTest(group=name):
                 matched = candidates(group, noise)
@@ -214,7 +225,8 @@ class ProxyIniTests(unittest.TestCase):
     def test_group_section_documents_the_family_prefix_contract(self):
         self.assertIn(GROUP_SECTION_COMMENT, self.lines)
         body = "\n".join(self.lines)
-        self.assertIn("^(?:isus|ccus|hyhk|xzhk|NL|cheaphost-日本|绿云 IIJ-日本|三网优化SG伪家宽)-", body)
+        self.assertIn("^(?:[^\\x00-\\x7F]+\\s*)?(?:isus|ccus|hyhk|xzhk|NL|racknerd-us"
+                      "|cheaphost-日本|绿云 IIJ-日本|三网优化SG伪家宽)-", body)
 
     def test_health_checks_use_https_and_valid_parameters(self):
         for name, group in self.groups.items():
