@@ -1,175 +1,64 @@
 # 项目长期记忆
 
-## 全选节点与唯一自动入口（2026-10-18，后续确认）
+## 1. 策略组拓扑与全选节点约定
 
-- 用户采纳恢复一个自动选择入口及默认分配，不恢复地区、协议、CDN 或手动孪生副本；“不要一堆手动组”不表示“不要自动选择”。前一节的“只要七组”已由本次确认细化为七个业务组加一个自动入口，后续不得机械删除自动组。
-- 用户明确希望所有业务组直接全选节点，不维护供应商家族白名单。使用 Subconverter `.*` 筛选实际导入的节点；新家族、emoji 和改名不应造成落单。历史家族前缀、负向噪声过滤和孪生组测试已不适用；仍需检查候选覆盖、空组和引用环。公告若被订阅伪装为合法节点也会被包含，只有实际出现时才加针对性排除，不恢复全家族白名单。
-- AI、TikTok、Netflix 等默认手选，不以测速替代地区/解锁；油管和漏网默认引用唯一自动组，微软保留默认直连。600 秒测速、150 毫秒容差仅为偏稳定的起点，不承诺固定出口或业务不掉线。
-- 游戏与谷歌推送不永久锁死直连：国内 Steam / 下载域直连例外必须在平台整体规则前；Steam 商店、社区和 Epic / Sony 非下载业务与 FCM 跟随漏网，FCM 的 IP 规则也不能遗留在 DIRECT 目标。复用 ACL4SSR SteamCN 及 uklans/cache-domains 的确证下载数据，后者 MIT 许可需保留完整声明。
-- 规则只按实际顺序匹配；精确 `DOMAIN` 不会自动优先于更早的 `DOMAIN-SUFFIX`。社区下载清单可作为域名用途依据，不是本地速度、覆盖完整性或官方服务保证。
-- Subconverter 的自动组尾字段是 `interval[,timeout][,tolerance]`，不是两段 `interval,tolerance`；600 秒 / 150ms 应写 `600,,150`。依据官方 `pref.example.ini` 的 `[proxy_groups]` 格式与 v0.9.0 实际输出字段核对，后续不可只用自写投影证明字段解析正确。
-- 临时本地转换校验应固定回环监听，只用合成节点与公开规则快照，区分最终 YAML 的结构/域名首命中和真实业务。`exclude_remarks=` 若被转换器按空正则保留会排除所有名字；测试环境禁用该过滤时应移除该项或用不匹配正常名称的表达式，不能把“无节点”先判成全选配置失败。
-- DNS / IPv6 应基于客户端实际生成配置、接管方式和连接记录验证，不能为“全部采纳”凭空给 Subconverter 外部 ini 添加不受支持字段。Cloudflare 同条件 A/B 需要实际出口与浏览器会话；没有节点和现场会话时明确留作未验证，不拿占位转换代替。
+- **10+1 极简拓扑**：保留 10 个业务手动组（`🤖 AI服务`、`💬 社区论坛`、`🪙 加密与支付`、`📲 电报消息`、`📹 油管视频`、`🎵 TikTok`、`🌍 国外媒体`、`🎥 奈飞视频`、`Ⓜ️ 微软服务`、`🐟 漏网之鱼`）与 1 个自动优选组（`♻️ 自动选择`）。不再设立地区、协议、CDN、主控“节点选择/手动切换”或“-手动”孪生副本；国内服务与广告拦截直接指向内置 `DIRECT` / `REJECT`，不创建可被误切到代理的国内组或独立广告组。
+- **全选节点（`.*`）**：所有策略组统一使用 `.*` 筛选转换器实际导入的全部具名节点，不维护供应商家族白名单。供应商改名、增删地区家族或前置多字节 UTF-8 国旗 emoji 均不会导致节点落单。
+- **已知边界**：Subconverter 的名称正则只匹配含显示名的节点（订阅中缺失名称片段的节点必然落单）；若订阅将到期/流量公告伪装为合法节点也会被 `.*` 包含，仅在实际出现时做针对性排除，不恢复家族白名单。
+- **默认候选与测速参数**：
+  - `🤖 AI服务`、`💬 社区论坛`、`🪙 加密与支付`、`🎵 TikTok`、`🌍 国外媒体`、`🎥 奈飞视频` 默认首项为首个节点（手选优先，不以测速延迟替代地区合规、解锁或高频 Cloudflare/金融风控会话 IP 固定要求）；
+  - `📲 电报消息`、`📹 油管视频`、`🐟 漏网之鱼` 默认首项为 `[]♻️ 自动选择`（`🐟 漏网之鱼` 末尾保留 `[]DIRECT` 兜底）；
+  - `Ⓜ️ 微软服务` 默认首项为 `[]DIRECT`，次选 `[]♻️ 自动选择` 与全节点；
+  - `♻️ 自动选择` 使用 `url-test`，测试地址 `https://www.gstatic.com/generate_204`，尾字段按 Subconverter `interval[,timeout][,tolerance]` 三段语法写为 `600,,150`（依据官方 `pref.example.ini` 与 v0.9.0 实测确认，不可简写为两段 `600,150`）。
 
-**Why:** 用业务入口表达用户选择比按节点名分类更稳健；策略组精简、自动选择和业务稳定性并不互斥。
+**Why:** 供应商换代频繁改变命名与 emoji 前缀，维护家族前缀白名单极易造成分组匹配为空并被 Subconverter 静默补成 `DIRECT`（`src/generator/config/subexport.cpp#L643-L654`）；用少量业务入口直接表达用户选择比按节点名分类更稳健。
 
-**How to apply:** 以最新用户确认覆盖下文历史约定；对任意新名字做全选覆盖测试，保留一个自动组并检查默认候选顺序；国内与下载例外使用首命中验证，不把内核解析通过当作业务可用。
+**How to apply:** 修改 `proxy.ini` 策略组时，保持 10 个业务组 + 1 个 `♻️ 自动选择` 的结构与默认首项顺序，对任意新增或改名节点用 `scripts/test/test_proxy_ini.py` 验证全选覆盖、无空组及无循环引用。
 
-## 精简需求与 Cloudflare 排查边界（2026-10-18）
+## 2. 分流规则顺序与防污染约束
 
-- 用户只需要业务组独立手选节点，不接受成套地区、协议、CDN、自动测速与“手动孪生”入口；YouTube / TikTok、国外媒体 / Netflix 分开选。下文旧的“主组暴露多个手动组”“每个自动组必须有手动孪生”是历史需求，不能据此重新扩张分组；节点命名、脱敏和分层验证约束继续适用。
-- 国内 App 应固定直连，不用可切换到代理的“全球直连 / 国内媒体”组。域名白名单应在宽泛海外规则之前；仅保留 GEOIP,CN,no-resolve 不能保证未知域名的国内流量一定直连，需检查实际连接的首命中规则。
-- 第三方媒体规则也可能包含通用基础设施。本次实际取得的 ACL4SSR `ProxyMedia.list` 含 `DOMAIN-SUFFIX,challenges.cloudflare.com`；通用挑战域不应因媒体源而绑定媒体出口，也不能一概强绑 AI。远程正文会变化，调整时重新核对并验证最终规则优先级。
-- “套 CDN”通常描述代理入口，不足以判断目标网站看到的出口 IP；固定手选节点也不保证供应商出口固定。Cloudflare 官方明确 Managed Challenge 的原请求与解题请求若来自不同 IP，解题可能无效；共享出口信誉、浏览器扩展 / JavaScript、挑战资源阻断也需分别排查，不能承诺靠精简组或换非 CDN 节点消除验证。
-- 排查时先保持同浏览器、同站点、同操作，仅更换一个因素；可临时把 AI、媒体、漏网之鱼设为同一实测稳定节点以排除分流影响，不默认清 Cookie、不频繁换节点，也不把节点名称中的“家宽 / 解锁”视为能力证据。
-- 官方依据：https://developers.cloudflare.com/cloudflare-challenges/concepts/how-challenges-work/ 、https://developers.cloudflare.com/cloudflare-challenges/troubleshooting/ 、https://developers.cloudflare.com/cloudflare-challenges/troubleshooting/challenge-solve-issues/ 。
+- **严格顺序匹配**：规则仅按最终生成顺序自顶向下匹配（First-Match-Win），精确 `DOMAIN` 不会自动优先于位置更靠前的 `DOMAIN-SUFFIX` 或 `DOMAIN-KEYWORD`。整体顺序固定为：基础直连与防误杀白名单 → 广告拦截 → AI 专属分流 → 细分视频与微软 → 国内应用与 Apple 直连 → 游戏下载直连例外与平台/推送代理 → 电报消息、加密与支付、社区论坛、海外例外与国内域名规则集合 → 通用开发者/国外媒体/GFW 代理 → 国内 IP 与下载兜底（含 `GEOIP,CN,no-resolve`） → `🐟 漏网之鱼,[]FINAL`。
+- **AI 规则纯净源与内联契约**：
+  - 远程源仅保留 `blackmatrix7` 的 `OpenAI.list` 与 `Claude.list`；
+  - Google AI（`aistudio.google.com`、`makersuite.google.com`、`gemini.google.com`、`generativelanguage.googleapis.com`）、Copilot（`api.githubcopilot.com`、`copilot-proxy.githubusercontent.com`、`copilot.microsoft.com`、`sydney.bing.com`）采用精确 `[]DOMAIN` 内联，Perplexity（`perplexity.ai`）、xAI（`x.ai`、`grok.com`）采用 `[]DOMAIN-SUFFIX` 内联，且整段必须位于微软与通用海外规则之前；
+  - **严禁引入污染源**：禁止引入 `ACL4SSR/AI.list`、`blackmatrix7/Gemini.list`、`blackmatrix7/Copilot.list` 及宽泛 `DOMAIN-KEYWORD,generativelanguage`（因其混入 `challenges.cloudflare.com`、`auth0.com`、`stripe.com`、`www.bing.com`、`apis.google.com` 等通用身份认证、支付、搜索与 Google 底层通信域名）。
+- **电报、加密支付与社区论坛独立分流契约**：
+  - **电报（`📲 电报消息`）**：`ACL4SSR/Telegram.list` 仅含 13 条规则，对比 Telegram 官方 `core.telegram.org/resources/cidr.txt` 及 AS62041 路由表漏掉了 `91.105.192.0/23`、`185.76.151.0/24`、`5.28.192.0/18`、`2001:b28:f23c::/48`、`2a0a:f280::/32` 以及 `cdn-telegram.org`、`telegram-cdn.org`、`fragment.com`、`tx.me`、`tg.dev`、`graph.org`、`legra.ph`、`comments.app`、`quiz.directory`，须在 `Telegram.list` 之前显式内联补齐；不直接改用含 `IP-ASN` 与第三方客户端杂项的 `blackmatrix7/Telegram.list`。
+  - **加密与支付（`🪙 加密与支付`）**：引用 `ACL4SSR/Ruleset/Crypto.list`（260 条，含 OKX 欧易、Bybit、币安、Gate.io、Coinbase、Kraken、MetaMask、Uniswap、TradingView、DeBank、Etherscan 等）、`ACL4SSR/Ruleset/Binance.list`（9 条）与 `blackmatrix7/PayPal/PayPal.list`（247 条），并内联补齐 `Crypto.list` 漏掉的 Bybit 静态/行情 CDN（`bycsi.com`、`bytick.com`、`byabcde.com`、`bybbi.com`、`byd3c3.com`）、新兴交易所（`bitget.com`、`bitgetapp.com`、`htx.com`、`hyperliquid.xyz`）及跨境支付/U卡（`wise.com`、`revolut.com`、`airwallex.com`、`dupay.one`、`onekey.so`、`pokepay.cc`、`redotpay.com`）。默认手选固定合规节点优先，避免与美国 AI 节点混用或因 `url-test` 频繁切 IP 触发交易所/支付风控。
+  - **社区论坛（`💬 社区论坛`）**：NodeSeek（`nodeseek.com` 及官方图床 `nodeimage.com`、姊妹站 `deepflood.com`、评测站 `nodequality.com`）、LINUX DO（`linux.do` 及孵化站 `idcflare.com`）、V2EX（`v2ex.com` 及官方图床 `v2ex.co`）、HostLoc（`hostloc.com`）、2Libra（`2libra.com`）、LowEnd 系列（`lowendtalk.com`、`lowendspirit.com`、`lowendbox.com`）、Reddit、Discord（含 `discordcdn.com`）、X/Twitter 与 `Developer.list` 统一归入 `💬 社区论坛`（默认手选固定节点优先），避免落入 `🐟 漏网之鱼` 因 `url-test` 切换出口 IP 触发 Cloudflare 反复验证或主站与图床跨出口裂图。
+- **通用挑战域解耦**：ACL4SSR `ProxyMedia.list` 含有 `DOMAIN-SUFFIX,challenges.cloudflare.com`，必须在其之前显式单列 `ruleset=🐟 漏网之鱼,[]DOMAIN-SUFFIX,challenges.cloudflare.com`，避免通用 Cloudflare 验证资源被绑死到媒体出口或单一 AI 出口。
+- **父子域、国内直连规则集与业务例外顺序**：
+  - **京东与广告防误杀白名单**：`jd.com`、`360buy.com`、`360buyimg.com`、`jdcloud.com`、`jdpay.com`、`jcloudcs.com` 以及易被 `BanProgramAD.list` 误伤的微信朋友圈视频（`wxsnsdy.wxs.qq.com`、`wxsnsdythumb.wxs.qq.com`）、腾讯游戏活动中心（`act.qq.com`）、网易邮箱静态图片（`img1.126.net`、`img2.126.net`、`mimg.126.net`）、淘宝优惠跳转（`g.click.taobao.com`、`ai.m.taobao.com`、`re.m.taobao.com`）置于所有代理与广告规则之前直连。
+  - **国内直连远程规则集合（防 `no-resolve` 漏入代理）**：第 8 节 `ChinaCompanyIp.list`、`ChinaIp.list` 与 `GEOIP,CN,no-resolve` 均带 `no-resolve`（在系统代理域名连接下不触发 DNS 解析而直接跳过 IP 规则落入 `FINAL`）。由于单一 `ACL4SSR/ChinaDomain.list` 仅 635 条，故在微软、Steam、Sony、GoogleCNProxyIP 之后、宽泛海外规则（`Developer.list`、`ProxyMedia.list`、`ProxyGFWlist.list`）之前，组合引入 `ACL4SSR/Ruleset/CN.list`、`PublicDirectCDN.list`、`AccelerateDirectSites.list`、`blackmatrix7/ByteDance/ByteDance.list`、`blackmatrix7/Alibaba/Alibaba.list`、`blackmatrix7/China/China.list`（3,721 条）与 `ACL4SSR/ChinaDomain.list`，并辅以少量新兴国产大模型与游戏域名内联（`deepseek.com`、`kimi.com`、`qianwen.com`、`tongyi.com`、`stepfun.com`、`minimaxi.com`、`minimax.io`、`hailuoai.com`、`kurogames.com`、`hypergryph.com`、`hg-cdn.com`、`xhslink.com`、`inkuai.com`）。
+  - **Google 例外链**：`xn--ngstr-lra8j.com`、`services.googleapis.cn` 与 `GoogleCNProxyIP.list`（代理例外）必须先于 `CN.list` 与 `GoogleCN.list`（直连白名单，含 `crl.pki.goog`），而 `GoogleCN.list` 必须先于 `ProxyGFWlist.list`（含父域后缀 `pki.goog`）。
+  - **游戏下载与 FCM 推送**：`SteamCN.list`、`GameDownload.list`、`steamserver.net`、`steampipe.akamaized.net` 及源于 `uklans/cache-domains` 的 Epic / Sony 确定性下载域名必须在 `Steam.list`、`Epic.list`、`Sony.list` 之前直连（须保留根目录 `规则数据许可.txt` 的 MIT 许可声明）；商店、社区、账号主域与 `GoogleFCM.list`（含 IP 段）统一归入 `🐟 漏网之鱼`。
+- **广告规则源边界**：采用 ACL4SSR 同源 classical 格式三件套（`BanAD.list` + `BanProgramAD.list` + `BanEasyListChina.list`）并直接指向内置 `REJECT`；不引入未经 Subconverter 默认 `surge` 格式验证的超大 `payload:` YAML（如 REIJI `adblock_reject.txt` 约 595k 条），防止转换异常或误杀 `statsig`、`featuregates` 等业务辅助域名。
 
-**Why:** 组越多不等于分流更准确；通用验证资源被业务规则误分流，以及把代理入口误当出口，都会让 Cloudflare 问题被错误归因。
+**Why:** 第三方规则列表常混入通用基础设施或父域后缀，盲目整份引入或颠倒顺序会造成隐蔽的全局认证/支付劫持、Cloudflare 跨出口验证失败或国内直连失效。
 
-**How to apply:** 保持少量独立业务入口，核对上游正文与实际首命中；区分配置层风险修正与用户环境的真实故障定位，使用出口 IP 和同条件 A/B 结果判断，不恢复已废弃的拓扑契约。
+**How to apply:** 新增或调整规则前先核查远程文件正文、格式与父子域交集；核心业务优先使用显式 `[]DOMAIN` / `[]DOMAIN-SUFFIX` 内联，并在 `scripts/test/test_proxy_ini.py` 中同步维护顺序断言与防污染 `assertNotIn` 检查。
 
-## Clash / Mihomo 调研与验证约束（2026-08-27）
+## 3. 订阅解码与分层验证方法
 
-- 本项目同时维护 Subconverter 外部配置 `proxy.ini` 与 Mihomo/Clash 配置知识库；`.ini` 不能直接当作 Mihomo YAML 导入。
-- 调研时必须区分四类结论：官方事实、当前 Mihomo 实现细节、工程经验、待实测假设。尤其不要把 Fake-IP、TUN、`no-resolve`、`tcp-concurrent`、测速周期或 `round-robin` 的经验写成绝对保证。
-- 当前 Mihomo 重点版本边界：`relay` 策略组已移除；链式前置使用节点级 `dialer-proxy`；主配置兜底优先写 `MATCH`，不能把 Subconverter 的 `FINAL` 等同为原生规则；`[]` 是 Subconverter 语法。
-- 规则验证必须同时检查规则顺序、UDP 不支持时的后续尝试、`behavior`/`format` 与远程文件内容，以及 `no-resolve` 是否符合具体 DNS/连接上下文。
-- DNS/TUN 验证不能只看 `fake-ip`：要检查 `fake-ip-filter`、DNS 劫持 UDP/TCP 覆盖、应用自带 DoH/DoT、Android Private DNS、IPv6、WebRTC、虚拟网卡和防火墙。
-- 策略组验证重点：`url-test` 的延迟只是健康检查 URL 的结果并受 `tolerance` 影响；`fallback` 有顺序语义；`load-balance` 是连接级分配，需考虑会话粘性；测速周期按节点数、URL、设备与故障恢复要求实测。
-- `proxy.ini` 的静态审计（2026-08-27 记「36 个策略组、40 条 ruleset」）已过期；2026-10-05 实测改动前为 28 个 `custom_proxy_group`、36 条 `ruleset`，同日节点换代后为 51 个策略组、36 条 ruleset（规则行未动）。引用无明显未定义或循环；URL 可达不等于格式正确或业务可用。后续若改配置，必须先确认生成器与目标 Mihomo 版本，再做生成 YAML 校验和业务 A/B 测试。
-- 主要官方来源：
-  - https://wiki.metacubex.one/config/
-  - https://github.com/MetaCubeX/mihomo
-  - https://github.com/MetaCubeX/Meta-Docs
-  - https://github.com/tindy2013/subconverter
-  - https://github.com/ACL4SSR/ACL4SSR
-  - https://github.com/blackmatrix7/ios_rule_script
+- **订阅解码与脱敏**：
+  - `vmess://` 采用 URL-safe Base64（须用 `base64.urlsafe_b64decode` 解析 JSON 中的 `ps` 字段，标准 `b64decode` 会因 `-`/`_` 报错）；`vless://` 节点名位于 `#fragment`（须用 `urllib.parse.unquote` 解码并原样保留 emoji、空格与中文）；
+  - 解码后先核对节点总条数以防长内容被截断；订阅内容仅在内存中处理，严禁将真实 `IP:端口`、UUID、节点随机后缀或带参订阅链接写入仓库文件。
+- **四层验证边界（报告中必须严格区分）**：
+  1. **离线规则与分组回归**：运行 `py -3 -B scripts/test/test_proxy_ini.py`（无 `py` 时用 `python -B scripts/test/test_proxy_ini.py`），基于合成名称夹具校验分组覆盖、默认首项、无环引用与规则顺序。
+  2. **可选 Mihomo 内核结构校验**：设置环境变量 `MIHOMO_BIN`（如 `D:\Program Files\Clash Verge\verge-mihomo.exe`，迁移设备后需重确认）再次运行测试脚本。必须通过 `-t -d <临时目录> -f <UTF-8临时文件>` 传入无凭据回环占位配置，且 `json.dumps(..., ensure_ascii=False)` 直接输出 UTF-8（规避 Windows 约 32KB 命令行长度限制 `WinError 206` 与 YAML 不支持的 UTF-16 代理对转义）。
+  3. **本地 Subconverter 转换校验**：临时本地转换须固定绑定 `127.0.0.1` 回环地址，仅使用合成节点验证最终 YAML 的语法与首命中；测试环境禁用节点排除时应移除 `exclude_remarks=`（若保留空值 `exclude_remarks=` 会被当作空正则排除全部节点）。
+  4. **真实客户端与业务可用性**：远程规则 URL 返回 HTTP 200 或内核 `-t` 校验通过，均不等于规则语义正确或节点出口可用；DNS/TUN 接管效果与流媒体/AI 解锁必须由真实客户端连接记录与业务响应确认。
 
-**Why:** 该项目的核心风险不是缺少配置片段，而是版本、语法边界和“经验被误写成保证”。
+**Why:** 单一层级的检查容易产生假阳性（例如引用合法但分组为空、内联命令行超长报错、空 `exclude_remarks` 过滤全部节点、或把占位校验当成真实业务可用）。
 
-**How to apply:** 后续修改 `proxy.ini` 或生成 Mihomo 配置前，先读取本文件与 `clash_knowledge_base.md`，再用目标内核校验生成结果；涉及 DNS、TUN、协议和会话问题时，报告必须说明已验证项与未验证项。
+**How to apply:** 每次修改 `proxy.ini` 后必跑离线回归测试；在交付报告中明确列出已执行的验证层与未验证层（如未设置 `MIHOMO_BIN`、未跑真实 Subconverter 或无现场浏览器会话时如实声明）。
 
-## 规则源链接验证经验（2026-08-27）
+## 4. Cloudflare 与真实业务排查边界
 
-- jsDelivr 镜像对 ACL4SSR 与 blackmatrix7 规则源可返回 200；本次 `REIJI007/AdBlock_Rule_For_Clash` 的 jsDelivr 地址返回 403，GitHub Raw 地址返回 200，因此该规则保留 Raw 链接。
-- `custom_proxy_group` 的反引号数量不能用“必须偶数”判断；`select` 常见为 2 个分隔符，`url-test`/`fallback`/`load-balance` 常见为 4 个，需按字段结构验证。
+- **入口标签不等于出口能力**：节点名称中的“套 CDN / 家宽 / 原生解锁”仅描述代理入口或供应商命名标签，不能证明目标站点看到的出口 IP 固定或信誉良好；手动固定选择节点仅避免由 `url-test` 测速触发切换，不保证服务端出口 IP 不变。
+- **Managed Challenge 同出口要求**：Cloudflare 官方文档明确，Managed Challenge 的原始请求与解题验证请求若来自不同出口 IP，解题可能无效。
+- **单变量对照排查法**：遇到 Cloudflare 循环验证或 AI/流媒体访问异常时，保持同一浏览器、同一站点、同一操作会话，每次仅改变一个变量；可先临时将 `🤖 AI服务`、`🌍 国外媒体`、`🐟 漏网之鱼` 指向同一个实测稳定的节点以排除分流跨出口影响，不默认清空 Cookie、不频繁切换节点，也不凭空向 Subconverter `.ini` 添加其不支持的 Mihomo 原生 DNS/TUN 字段。
 
-**Why:** 规则源的 CDN 可达性受仓库、缓存和网络策略影响；语法验证必须依据 Subconverter 字段格式，而不是简单字符计数。
+**Why:** 通用挑战资源被分流到不同出口、服务端动态出口漂移、出口 IP 信誉或客户端环境问题都会触发验证异常，按节点名称中的“CDN”字样归因会误导排障方向。
 
-**How to apply:** 更新远程规则链接后逐条请求并记录状态码；对策略组检查组名、类型、候选/正则、测速 URL 和参数字段是否完整。
-
-## 当前节点优化的约束与验证方法（2026-09-21）
-
-- 用户确认只针对当前订阅的节点优化，不建设适配任意订阅的通用模板；节点数已从 8 条换代至 13 条具名（+1 条待命名）见文末「节点换代后的家族前缀与手动孪生约定」。后续改名或添加其他节点家族时，先检查筛选覆盖，再决定是否扩展范围。
-- 分组引用存在不代表其中有节点。官方 Subconverter 默认区分名称大小写，无 provider 的空 Clash 分组会补 `DIRECT`；需测试实际名称的匹配结果与默认路径。来源固定在 https://github.com/tindy2013/subconverter/blob/a0d4eab28cb8b6c782d4ce5c3a918de4829b4a72/src/generator/config/subexport.cpp#L643-L654 。
-- 基础回归命令：`py -3 -B scripts/test/test_proxy_ini.py`，仅使用名称 fixture，无凭据、无网络。Python Launcher 不可用时改为 `python -B scripts/test/test_proxy_ini.py`。
-- 可选内核校验：在 PowerShell 设置 `$env:MIHOMO_BIN = 'D:\Program Files\Clash Verge\verge-mihomo.exe'` 后运行上述测试；该路径来自本机进程检查，迁移设备后必须重新确认。未设置时明确跳过内核校验。
-- 内核测试用 `-t -f <临时文件>` 和独立临时目录，传入无凭据、回环地址占位节点的分组投影，只检查分组结构；内联 `-config` 参数在 roster 超过 14 条后会撞 Windows 约 32KB 命令行上限（WinError 206），必须走文件。它不能代替实际 Subconverter 输出、完整规则源、VMess 参数、业务连通性或出口地区验证。
-- 用 JSON 作为 YAML 兼容输入时，非 BMP 字符应直接输出为 UTF-8（Python `json.dumps(..., ensure_ascii=False)`），避免将组名中的字符输出为 YAML 不支持的 UTF-16 代理对转义。
-- CDN 与非 CDN 入口是否共用出口、节点名中的地区与“解锁”是否真实，必须另行实测。手动选择仅避免由测速触发的换节点，不保证服务器出口 IP 不变。
-
-**Why:** 少量自定义节点更容易暴露模板的名称假设；只检查引用或只让内核解析占位配置，都会漏掉实际转换与选路问题。
-
-**How to apply:** 修改时先用脱敏名称测试覆盖、空组、默认路径、候选顺序和循环引用；要求保留规则时，对 `ruleset=` 行按原顺序计算指纹。报告明确哪些验证没有运行，不把占位节点校验表述为真实节点可用。
-
-## 分流规则源审计经验（2026-09-21）
-
-- 规则行没有精确重复，不代表没有语义重复；必须同时比较远程文件正文、规则类型、域名后缀包含关系和最终生成顺序。
-- ACL4SSR `Ruleset/AI.list` 与 blackmatrix7 OpenAI/Claude 规则存在明显交集；ACL4SSR AI 自身还有 `DOMAIN` 与 `DOMAIN-SUFFIX` 的同域重复。多个源指向同一策略组通常只增加维护和匹配开销，不能提升出口可用性。
-- 大型广告源必须先确认格式与规模。REIJI `adblock_reject.txt` 当前为带 `payload:` 的 YAML 规则文件，规模约 595k 条；Subconverter `ruleset=` 默认按 `surge` 规则解释，官方文档未确认任意 `payload:` YAML 可被默认格式正确导入，必须在实际转换器上验证，不能仅凭 HTTP 200 认为生效。
-- 广告源与 AI 源的交集要区分核心服务域名和辅助/追踪域名：广告规则可能命中 `statsig`、`featuregates`、`segment` 等辅助域名，但本次样本未覆盖 `openai.com`、`chatgpt.com`、`anthropic.com`、`claude.ai` 等核心主域；辅助域被 REJECT 仍可能破坏登录、挑战或遥测流程。
-- 规则顺序审计应记录白名单/局域网、广告、AI、媒体、海外、国内、兜底的先后，并对重叠域名做首命中模拟；Subconverter 的最终输出和目标内核行为仍需另行验证。
-
-**Why:** 规则源常以不同 URL 提供相同条目，且格式包装、辅助域名和首命中顺序会比单纯的行重复更容易造成隐蔽故障。
-
-**How to apply:** 更新广告或 AI 规则源时，先下载正文做格式识别和交集统计，再验证 Subconverter 实际转换结果；优先保留一套职责清晰、可验证的 AI 源，广告源避免无证据叠加超大规则集。
-
-## 规则集优化决策（2026-09-21）
-
-- 当前配置最终只保留 ACL4SSR `BanProgramAD.list` 作为广告规则源；REIJI `adblock_reject.txt` 因体积过大且返回 `payload:` YAML、未确认可被 Subconverter 默认格式正确导入而移除。
-- 当前 AI 分流只保留 blackmatrix7 的 OpenAI 与 Claude 专用规则，移除 ACL4SSR 通用 AI 源和 `challenges.cloudflare.com` 内联规则；后者是通用 Cloudflare 挑战域，不应默认归入 OpenAI。
-- 广告规则统一挂到 `🛑 广告拦截`，删除重复的 `🍃 应用净化` 规则组；AI 仍使用原 `🤖 OpenAI` 策略组名以保留客户端选择状态。
-- 离线回归新增规则源目标、去重和顺序契约；网络可达性、Subconverter 实际转换、Mihomo 完整生成配置和真实 AI/广告业务效果仍需分层验证。
-
-**Why:** 这套取舍优先保证格式可解释、规则职责单一和首命中顺序稳定，而不是盲目堆叠更大的远程规则集。
-
-**How to apply:** 后续若需要扩大 AI 覆盖，先新增独立业务组或明确白名单，不要把通用 Cloudflare、认证和遥测域名直接并入 OpenAI；替换广告源前先验证正文格式与 Subconverter 转换结果。
-
-## 手动节点分组约定（2026-09-21）
-
-- 当前主组 `🚀 节点选择` 提供手动入口；四组（`🚀 全部节点`、`🚀 手动切换1`–`3`）都使用统一家族正则，覆盖当前全部具名节点。2026-10-05 起另有每个自动组的 `-手动` 孪生组，见下节。
-- 手动组使用 `select`，与 `♻️ 自动选择` 和 `🛡️ 故障转移` 分开；用户可为不同用途保存不同节点，不改变业务组的地区筛选。
-- 若节点命名家族变化，必须同步检查手动组、每个自动组的 `-手动` 孪生组和主组入口，避免出现空组后被 Subconverter 补成 `DIRECT`。
-
-**Why:** 一个手动组只能保存一个选择，多个独立 `select` 组可以保留不同节点预设，同时不把手动选择与自动测速或故障转移混在一起。
-
-**How to apply:** 新增手动组时优先复用当前节点家族正则，并在 `scripts/test/test_proxy_ini.py` 中验证每组的完整节点覆盖和主组入口。
-
-## Google 国内白名单的顺序约束（2026-09-22）
-
-- `GoogleCN.list` 的直连例外必须位于 `ProxyGFWlist.list` 前，同时保留显式代理例外及 `GoogleCNProxyIP.list` 在前；不能机械地把所有国内规则移到海外通用规则之后。
-- 已核实的重叠示例：GoogleCN 的 `DOMAIN-SUFFIX,crl.pki.goog` 会被 GFW 的 `DOMAIN-SUFFIX,pki.goog` 覆盖；UnBan 的 `DOMAIN,dl.google.com` 仅是精确放行，不能替代整份 GoogleCN 白名单。
-- 规则源正文会变化；离线顺序契约只防止已知配置回归，不等同于完整远程规则首命中、实际转换或业务验证。
-
-**Why:** 通用代理规则中的关键字和父域后缀可能遮蔽更具体的直连例外，规则分节的可读性不能代替实际匹配优先级。
-
-**How to apply:** 调整规则顺序时，核对上游正文中的父子域和关键字交集，保持代理例外、直连白名单、通用代理的优先级，并先用会失败的顺序回归测试复现问题。
-
-## 节点换代后的家族前缀与手动孪生约定（2026-10-05）
-
-> 2026-10-05 晚订阅再次换代（emoji 前缀 + racknerd-us 家族，14 条具名），见「订阅换代晚间场」一节；本节数字为上午状态。
-
-- 2026-10-05 起节点从旧的 4 家族 8 条（`isus`/`hyhk`/`xzhk`/`ccus`）换代为 **13 条具名 + 1 条无名**，分属 7 个家族：`isus-`（美国原生解锁 ×2）、`hyhk-`/`xzhk-`（香港 ×4）、`NL-`（荷兰 ×2）、`cheaphost-日本-`（×1）、`绿云 IIJ-日本-`（×2）、`三网优化SG伪家宽-`（×2，即新加坡家宽）。`ccus` 在 13 条中已不存在，但前缀仍保留在 alternation 里，回来时不会落单。
-- **本次修掉的真实缺陷**：改动前所有节点级选择器都是 `^(?:isus|hyhk|xzhk|ccus)-`，`NL`/`cheaphost-日本`/`绿云 IIJ-日本`/`三网优化SG伪家宽` 四个家族一个都匹配不到 —— 14 条里只有 6 条可选。改名换姓不会让旧正则自动跟上，**每次订阅换代都必须重算节点级覆盖**。
-- 唯一家族正则收敛为 `^(?:isus|ccus|hyhk|xzhk|NL|cheaphost-日本|绿云 IIJ-日本|三网优化SG伪家宽)-`，由测试 `test_group_section_documents_the_family_prefix_contract` 钉住；不要用裸子串，锚点用于挡住 `isusx-test`、`other-hk-cdn` 这类噪声名。
-- 约定：每个自动组（`url-test`/`fallback`）都有选择器逐字相同、类型为 `select` 的同名 `-手动` 孪生组，并在 `🚀 节点选择` 里暴露，由 `test_every_automatic_group_has_an_identical_manual_twin` 校验（该断言已用 `git show HEAD:proxy.ini` 验证过非空转：旧配置上失败 6 次）。
-- 第 14 条节点（vless）在订阅里没有名称片段，Subconverter 的节点级选择器全是名称正则，**无名称节点必然落单**；补到显示名后要把前缀并入 alternation 与测试夹具。当前 51 个组的 `🚀 全部节点` 实际只覆盖 13 条。
-- 公开仓库提交前必须脱敏：真实 `IP:端口`、节点名里的 UUID／随机域后缀都不要写进 `proxy.ini` 注释、测试夹具或本文件；夹具用合成名（如 `-example`）即可，断言只依赖家族前缀与 body 标记。
-
-**Why:** 家族前缀是唯一稳定的选区键（随机 UUID 后缀会随订阅刷新变化），而换代时“引用没断”不等于“节点还在候选里”——只查分组引用会漏掉整族节点失效。
-
-**How to apply:** 拿到新订阅后先解码名称、按 `^(?:族...)-` 重算每个组的候选集合，再核对每个自动组是否有 `-手动` 孪生、主组是否暴露；改完跑 `py -3 -B scripts/test/test_proxy_ini.py`（该套件输出在 stderr），并确认 `git diff` 里没有任何 `ruleset=` 行。
-
-## 订阅链接解码与校验方法（2026-10-05）
-
-- `vmess://` 的 base64 是 **URL-safe**，必须 `base64.urlsafe_b64decode`；用标准 `b64decode` 会因 `_`/`-` 报 `Incorrect padding`。
-- `vless://` 的节点名在 fragment，需 `urllib.parse.unquote`；`ps`／fragment 里可能含 emoji、空格与中文（`绿云 IIJ-日本` 有空格），选择器必须逐字保留。
-- 应用过滤器会截断长链接（本次 14 条只到了第 14 条的残缺部分），**解码后要核对条数**，缺名称的那条只能列为待确认，不要猜家族。
-- 覆盖与冗余审计的实算语义：整行按反引号切分，第一字段组名、第二字段类型，遇 `http(s)://` 即为测速字段起点；`[]` 前缀是组名或 `DIRECT`/`REJECT` 引用（需做传递闭包），其余按正则解释且**大小写敏感**。
-- `🌐 非CDN后缀节点` 的无环视负向表达在 55987 个穷举样本上划分正确，仅对 `NL-cdn`、`NL--cdn` 这类“家族后紧跟 `-cdn`”的极端命名分类错误；真实节点名都有中间 body，不受影响。新增此类命名时要重新穷举验证，别用“看起来完整”的写法掩盖。
-- 已知冗余（多维度落到同一候选集合，属数据决定而非缺陷）：`🇸🇬 新加坡节点`≡`🏡 家宽节点`（各 2 条）、`🇺🇲 美国节点`≡`🧬 原生解锁节点`（各 2 条，因无 ccus）；`🎬 流媒体解锁节点`(7) ⊃ `🇯🇵 日本节点`(3)，其 `(?:流媒体|解锁)` 键把 `isus-原生解锁` 也拉进来；`🔌 vm-ws 标记节点`(9) ⊃ `🇭🇰 香港节点` 与 `🇳🇱 荷兰节点`（港荷节点全是 vm-ws）。名字声明的“解锁/流媒体/家宽”只表示字符串包含，不代表服务真实可用。
-
-**Why:** 这些坑都会让“看起来校验通过”的结论失真：padding 报错会让人以为链接坏了，截断会让人漏节点，候选集合相同会让多维度的组在改动其一时静默漂移。
-
-**How to apply:** 解码后先核对条数再解析；审计时同时算“覆盖（有无孤儿）”“互斥（划分是否真划分）”“冗余（候选集合是否恒等）”，并把 `MIHOMO_BIN` 内核校验、真实 Subconverter 转换、出口地区与解锁实测分别列为未验证项。
-
-## AI 规则扩展与第三方规则集防污染经验（2026-10-05）
-
-- **外部规则集的严重污染与劫持风险**：不能盲目引入第三方的分流列表文件：
-  - `blackmatrix7/Copilot.list` 混入了 `challenges.cloudflare.com`（违反本项目 challenges 不归入 AI 的约束）、`www.bing.com`（劫持 Bing 正常搜索）、`auth0.com`（劫持通用身份认证）、`stripe.com`（劫持全网支付）及 sentry/segment/launchdarkly 等大量非 AI 基础设施，挂入 AI 组会劫持全局流量；
-  - `blackmatrix7/Gemini.list` 混入了 `apis.google.com`（Google 基础服务底层通信）、`colab` 关键词及 `generativelanguage` 宽泛关键词，整份引入会破坏 `GoogleCN.list` 直连白名单并导致 Google 基础通信被误代理；
-  - `ACL4SSR/AI.list` 混合了大量第三方工具，并与已有的 `ProxyMedia.list` 严重重叠。
-- **扩展 AI 覆盖的最佳工程实践**：坚持“纯净专用源（OpenAI/Claude）+ 核心服务显式内联”方案。
-  - 核心服务缺失域（如 `aistudio.google.com` 为 Google AI Studio 实际 302 落点但在各分源均缺失；`api.githubcopilot.com`、`copilot-proxy.githubusercontent.com` 在 Copilot.list 中缺失；`perplexity.ai`、`x.ai`、`grok.com` 分源均缺失）统一在 `proxy.ini` 中用 Subconverter `[]` 语法显式内联；
-  - Google Gemini API 域必须严格使用精确 `[]DOMAIN,generativelanguage.googleapis.com`，严禁使用 `DOMAIN-KEYWORD`，杜绝关键词扩大化与误伤。
-- **离线测试契约与防御性断言**：
-  - 测试契约严格限定离线、无网络、无外部 `.list` 文件，不能在离线单测中编写需依赖远程规则正文首命中的模拟；必须基于 ini 文件的静态 AST/规则断言（断言关键内联规则包含、规则段连续性、先于国外媒体与社交）；
-  - 测试套件中对已知污染源必须增加防御性 `assertNotIn`（明确禁止 `challenges.cloudflare.com`、`AI.list`、`Gemini.list`、`Copilot.list` 被引入 AI 规则段）。
-
-**Why:** 第三方规则列表正文常混合通用基础设施和遥测分析，表面上覆盖了新 AI 服务，实际上极易引入隐蔽的全局认证、支付和搜索劫持。
-
-**How to apply:** 后续扩展分流规则时，必须先逐行核查远程正文与关键词，核心服务优先使用显式 `[]DOMAIN` / `[]DOMAIN-SUFFIX` 内联，并在 `test_proxy_ini.py` 中增加对应的防污染断言与显式覆盖检查。
-
-## 订阅换代晚间场：emoji 前缀导致节点识别不到的修复（2026-10-05）
-
-- **现象与根因**：用户报"订阅之后识别不到"（转换短链 `v1.mk/Eh5rHGn`）。该短链 302 到 `api.v1.mk/sub`，是**已套用本项目 proxy.ini 的转换服务**（输出组名与本项目 51 组完全一致，且输出含 `aistudio.google.com` 规则，可据此判定其引用的是 GitHub main 最新配置）。当天晚间供应商 roster 变为 **14 条具名**：地区节点名被加国旗 emoji 前缀（`🇳🇱 NL-vm-ws-nl`、`🇺🇸 racknerd-us-解锁-vless` 等），并新增 `racknerd-us-` 美国家族 ×2、新加坡降为 1 条、cheaphost 名称缩短。锚定正则 `^(?:族...)-` 对带前缀名字全部落空：线上输出中荷兰/日本/新加坡/家宽/vl-reality 五组只剩 `DIRECT`，8/14 节点不进任何组。
-- **判定匹配时机的证据**：美国组（isus，无 emoji）有成员而荷兰/日本/新加坡（带 emoji）为空——若 emoji 是匹配之后才加的，这些组不会为空。因此转换器是在**带 emoji 的名字上做正则匹配**，修复必须落在正则上。
-- **修复契约**：所有节点级选择器统一为 `^(?:[^\x00-\x7F]+\s*)?家族前缀`——可选非 ASCII 前缀（emoji 旗标为多字节 UTF-8，`[^\x00-\x7F]` 按字节也成立）+ 可选空白 + 家族整体锚定。`std::regex`（ECMAScript）与 Python `re` 对 `\x`、`\s`、`(?:)` 语义一致。HK 家族（hyhk-/xzhk-）当前无前缀，保持严格锚定作为对照；`racknerd-us` 已并入美国与全量 alternation，`ccus` 保留防回潮。
-- **诊断方法（订阅内容只在内存，不落盘、不回显查询参数、不发第三方）**：clash UA 拉取转换输出 → 解析 `proxies:`/`proxy-groups:` 的 name 清单（930KB 全量 YAML）→ 复用 `test_proxy_ini.py` 的 `parse_groups`/`candidates` 把真实名字对照本地正则，按组计数并找孤儿。通用 UA 也返回 YAML，原始 base64 节点列表无法通过 UA 观察；修复后验证标准：全部组计数正确且孤儿为 0（实测 全部14/港4/美4/荷2/日3/新1/家宽1/cdn5/非CDN9/vm-ws7/reality1/原生2/流媒体8）。
-- **限制**：修复需推送到 GitHub main 后转换服务才会用上新正则；本地验证时线上输出仍显示空组属预期。真实客户端刷新订阅后的分组显示、节点出口与 AI 业务可用性仍需用户实测。
-- **当晚续报（roster 16 条）**：供应商随后补回 `🇸🇬 三网优化SG伪家宽-解锁-cdn` 并新增 `🇯🇵 cheaphost-日本-流媒体-解锁-cdn`；两条在修复后的正则下**零改动自动接住**（cdn 7、日本 4、新加坡与家宽各 2、非CDN 9、全部 16），验证了"可选前缀 + 家族锚定"对新增同族节点的扩展性。夹具已同步 16 条；同名节点的 ps 字段肉眼解码易错（三网误读成"五网"），必须程序解码。
-
-**Why:** 转换短链掩盖了"正则匹配发生在哪个形态的名字上"；只看引用完整性会误判配置没坏，只有对照转换输出中各组实际成员才能定位锚定失效。
-
-**How to apply:** 再遇"识别不到"：先拉转换输出看各组实际成员（空组=正则没跟上），用 `parse_groups`/`candidates` 对照真实名字，按"可选前缀 + 家族锚定"修 `proxy.ini`，同步更新夹具（UUID 用合成标记）并跑全套测试；改动必须推送后让用户刷新订阅确认。
-
+**How to apply:** 排查业务与验证故障时，先核对目标域名与 `challenges.cloudflare.com` 在客户端连接面板中的实际命中规则与出口一致性，再结合同条件 A/B 测试结果定位原因。

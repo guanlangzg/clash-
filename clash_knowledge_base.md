@@ -1,29 +1,29 @@
-# Clash / Mihomo / Subconverter 配置知识库
+# Clash / Mihomo / Subconverter 配置与分流知识库
 
-> **维护版本**：2026-08-27
-> **适用范围**：Mihomo（Clash.Meta）、兼容 Clash 的桌面/移动客户端、Subconverter `proxy.ini`
-> **研究原则**：把官方事实、实现细节、工程经验和待实测假设分开记录。版本敏感字段以目标内核实际版本的文档、配置校验和运行结果为准。
+> **维护版本**：2026-10-25（已合并全网分流调研报告与项目实证调研结论）
+> **适用范围**：Mihomo（Clash.Meta）、兼容 Clash 的桌面/移动客户端、Subconverter 外部配置 `proxy.ini`
+> **研究原则**：严格区分官方事实、实现细节、工程经验和待实测假设。版本敏感字段以目标内核实际版本的文档、配置校验和运行结果为准。
 
-## 0. 先回答：配置设计应调研哪些维度
+## 0. 配置设计十维检查清单
 
-后续任何 Clash 配置优化，至少检查以下 10 个维度：
+任何 Clash / Mihomo 配置优化与排障，至少检查以下 10 个维度：
 
 1. **内核与客户端版本**：Mihomo、旧 Clash、客户端打包内核是否一致；字段是否可解析。
-2. **策略组拓扑**：手动选择、自动测速、故障转移、负载均衡、业务组与地区组的层级关系。
-3. **规则引擎**：规则顺序、规则类型、规则集格式、目标策略以及域名/IP 解析副作用。
+2. **策略组拓扑**：手动选择、自动测速、故障转移、负载均衡、业务组与自动组的层级关系及候选覆盖。
+3. **规则引擎**：规则顺序、规则类型、父子域遮蔽、规则集格式、目标策略以及域名/IP 解析副作用。
 4. **DNS 架构**：`fake-ip`/`redir-host`、上游 DNS、策略 DNS、节点域名解析、过滤器和泄漏边界。
 5. **TUN、透明代理与嗅探**：系统接管范围、DNS 劫持、IPv4/IPv6、应用旁路和平台限制。
 6. **代理协议与链路能力**：TCP/UDP/QUIC、VLESS Reality、Hysteria2、TUIC、WireGuard、前置代理和多跳。
-7. **订阅转换与规则源**：Subconverter 语法、正则筛选、远程规则格式、更新周期和来源可用性。
-8. **业务分流**：AI、流媒体、社交、开发者服务、游戏平台、国内服务的出口和会话要求。
+7. **订阅转换与规则源**：Subconverter 语法、正则筛选、空组回退、远程规则格式、污染防范和来源可用性。
+8. **业务分流与验证机制**：AI、流媒体、社交、开发者服务、游戏平台、国内服务的出口一致性与 Cloudflare 验证要求。
 9. **性能与稳定性**：测速开销、规则规模、连接竞速、复用、MTU、失败恢复和客户端渲染。
-10. **安全与验证**：监听面、API、密钥、日志、DNS/IP/WebRTC 泄漏、配置校验和可重复 A/B 测试。
+10. **安全与分层验证**：监听面、API、密钥、日志、DNS/IP/WebRTC 泄漏、离线/内核校验和可重复 A/B 测试。
 
-任何结论都应标注为：
+所有结论按证据强度分为四类：
 
 - **官方事实**：可在目标版本官方文档或源码中确认。
-- **实现细节**：来自当前 Mihomo 实现，升级后需复核。
-- **工程经验**：合理的起点，不是普遍保证。
+- **实现细节**：来自当前 Mihomo 或 Subconverter 源码实现，升级后需复核。
+- **工程经验**：合理的实践起点，不是普遍保证。
 - **待实测假设**：必须在实际节点、网络、设备和客户端上验证。
 
 ---
@@ -32,15 +32,15 @@
 
 ### 1.1 生态判断
 
-- **Mihomo（Clash.Meta）**是当前 Clash 配置生态中功能最完整、维护活跃的内核之一，支持较多现代协议、规则扩展、TUN、嗅探和 MRS 规则集。
+- **Mihomo（Clash.Meta）**是当前 Clash 配置生态中功能最完整、维护活跃的内核之一，支持现代代理协议、复合规则、TUN、域名嗅探和 MRS 规则集。
 - **Clash Premium / OpenSource Clash**属于旧生态，字段和协议能力不能与 Mihomo 等同。
-- **sing-box**是不同配置体系，不能把 JSON 配置直接当作 Mihomo YAML。
+- **sing-box**是独立配置体系，不能把 JSON 配置直接当作 Mihomo YAML。
 - 客户端名称不等于内核版本；排障时必须记录客户端版本、实际内核名称和内核版本。
 
 ### 1.2 标准边界
 
-- Mihomo 原生配置通常是 YAML，核心入口包括全局参数、DNS、代理/代理提供者、`proxy-groups`、`rules` 和 `rule-providers`。
-- Subconverter `proxy.ini` 是**转换器外部配置**，不是 Clash/Mihomo 原生配置。直接把 `.ini` 当作 Mihomo 配置不会生效。
+- Mihomo 原生配置通常是 YAML（兼容 JSON 子集），核心入口包括全局参数、DNS、代理/代理提供者、`proxy-groups`、`rules` 和 `rule-providers`。
+- Subconverter `proxy.ini` 是**转换器外部配置**，不是 Clash/Mihomo 原生配置，直接导入 Mihomo 不会生效；Subconverter `.ini` 也不能直接承载 Mihomo 原生的 `dns:`、`tun:` 等顶层 YAML 块。
 - Alpha/开发分支可能包含稳定版没有的字段。生产环境优先使用稳定版；使用新协议或新字段时，先做配置校验和回滚准备。
 
 来源：
@@ -57,38 +57,31 @@
 
 | 类型 | 真实行为 | 适用场景 | 注意事项 |
 |---|---|---|---|
-| `select` | 保存并使用人工选择的代理或策略组 | 主控出口、业务手动切换 | 不会按延迟自动选择 |
-| `url-test` | 对候选代理做 HTTP 健康检查，优先选择健康且延迟较低者 | 地区自动优选 | 受 `tolerance`、`lazy`、失败状态影响 |
+| `select` | 保存并使用人工选择的代理或策略组 | 业务出口手选、主控切换 | 不会按延迟自动切换；手动固定节点仅避免测速换节点，不保证服务端出口 IP 不变 |
+| `url-test` | 对候选代理做 HTTP 健康检查，优先选择健康且延迟较低者 | 自动优选出口 | 受 `tolerance`、`lazy`、失败状态影响 |
 | `fallback` | 按 `proxies` 顺序选择第一个健康候选 | 主备容灾 | 全部不可用时实现可能仍回退到首项，不能当成绝对可用保证 |
-| `load-balance` | 在连接级别分配到多个候选代理 | 同质节点分摊连接 | 不会把一个会话拆到多个出口；需考虑会话粘性 |
+| `load-balance` | 在连接级别分配到多个候选代理 | 同质节点分摊连接 | 不会把单个连接拆到多个出口；需考虑跨连接会话粘性 |
 
-当前 Mihomo 实现支持的负载策略包括 `consistent-hashing`、`round-robin`，以及实现版本中提供的会话粘性策略。`round-robin` 不是必然导致登录失败，但可能让连续连接使用不同出口 IP；依赖出口稳定性的业务应优先选择手动、自动优选、一致性哈希或粘性策略。
+当前 Mihomo 实现支持的负载策略包括 `consistent-hashing`、`round-robin`，以及实现版本中提供的会话粘性策略。`round-robin` 可能让连续连接使用不同出口 IP；依赖出口稳定性的业务（如 AI、登录态敏感站点、Cloudflare 验证站点）应优先选择手动固定、自动优选（配较大容差）或一致性哈希。
 
-> **重要版本边界**：当前 Mihomo 已移除 `relay` 策略组。需要前置中转时，应在具体代理节点上研究 `dialer-proxy`；多跳会增加延迟、故障点和排障成本。
+> **重要版本边界**：当前 Mihomo 已移除 `relay` 策略组。需要前置中转时，应在具体代理节点上配置 `dialer-proxy`；多跳会增加延迟、故障点和排障成本。
 
 ### 2.2 健康检查语义
 
-- `url` 是健康检查地址，不是目标业务的完整可用性测试，也不是下载速度测试。
-- `interval` 单位为秒，`timeout` 单位为毫秒。
-- 未配置统一“最佳间隔”。300–600 秒可作为低频经验起点，但不是官方规范；节点数量、测速地址、故障恢复要求和服务商限制都要纳入评估。
-- `tolerance` 单位为毫秒。`url-test` 通常只有在当前节点延迟高于最快节点加上容差，或当前节点不健康时才切换；容差越大，越不容易因抖动切换。
+- `url` 是健康检查地址（常用 `https://www.gstatic.com/generate_204`），仅反映代理访问该 URL 的 HTTP 连通延迟，不是目标业务的解锁能力或下载带宽测试。
+- `interval` 单位为秒，`timeout` 单位为毫秒，`tolerance` 单位为毫秒。
+- 300–600 秒测速间隔、100–150 毫秒容差可作为偏稳定的工程起点（例如 `600,,150`），减少因瞬时抖动频繁切换出口，但不是官方固定规范。
 - `lazy` 默认行为和触发时机属于实现细节；未使用的组可能延迟测速，但首次使用、拨号失败或健康检查流程仍可触发检测。
-- `expected-status` 可以限制健康检查接受的 HTTP 状态码，默认通常不限制；状态码不符合时节点可能被判定为不健康。
-- 测速结果只代表“该代理访问测试 URL 的连通延迟”。它不能证明 OpenAI、Netflix、游戏或下载业务一定可用。
+- `expected-status` 可限制健康检查接受的 HTTP 状态码，状态码不符时节点被判定为不健康。
 
-### 2.3 推荐拓扑
+### 2.3 两种典型策略组拓扑与取舍
 
-```text
-业务规则组（AI / 视频 / 社交 / 游戏）
-        ↓
-主控组（select）
-        ↓
-自动优选 / 故障转移 / 一致性负载组
-        ↓
-地区组或实际节点
-```
-
-建议优先保持层级清晰：业务组引用少量稳定的主控/地区组，避免每个业务组重复堆入全部节点和全部地区组。是否造成性能问题应通过启动时间、内存、API 响应和切换体验实测，不宜写成绝对阈值。
+1. **多级地区/协议分层拓扑**（业务组 → 主控组 → 自动/故障转移组 → 地区/协议筛选组）：
+   - 适合节点数量庞大、命名规范高度统一的订阅。
+   - **风险**：若每个子业务组都重复塞入十几个地区组或 `-手动` 孪生组，会导致生成配置膨胀、客户端渲染与切换变慢；当供应商更改节点命名前缀或添加国旗 emoji 时，依赖严格前缀白名单的分组极易失配为空。
+2. **扁平业务直选 + 唯一自动组拓扑**（本项目当前采用）：
+   - 仅保留少量独立业务 `select` 组 + 1 个全局 `url-test` 自动组，均通过 `.*` 纳入全部有效节点；业务组按特性设置默认首项（地区/解锁敏感业务默认手选节点，通用/带宽型业务默认引用自动组，微软等默认 `DIRECT`）。
+   - **优势**：结构极简、客户端状态清晰，对供应商新增家族、改名和添加 emoji 具备天然免疫力。
 
 来源：
 
@@ -97,56 +90,67 @@
 
 ---
 
-## 3. 规则引擎与规则集
+## 3. 规则引擎、排序铁律与规则集防污染
 
-### 3.1 匹配顺序
+### 3.1 匹配顺序与父子域遮蔽
 
-Mihomo 通常按 `rules` 从上到下匹配，越靠前优先级越高；一般命中后停止继续匹配。但 UDP 请求遇到当前目标出站不支持 UDP 时，可能继续尝试后续规则。因此，“First-Match-Win”是一般原则，不是无条件的绝对描述。
+Mihomo 按最终生成的 `rules` 列表**自顶向下**逐条匹配，通常命中即停止（First-Match-Win）；仅在 UDP 请求遇到当前目标出站不支持 UDP 时，可能继续尝试后续规则。
 
-“局域网 → 广告 → AI → 流媒体 → 海外 → 国内 → 兜底”是常见配置设计建议，不是内核规定的固定优先级。实际优先级只由最终生成的规则列表决定；重叠规则必须按业务意图排序。
+**关键事实**：
+- **精确规则不会自动越级**：排在后面的精确 `DOMAIN` 不会优先于排在前面的 `DOMAIN-SUFFIX` 或 `DOMAIN-KEYWORD`。
+- **分节推荐顺序**：
+  1. **基础直连与高优先级白名单**（局域网 `LocalAreaNetwork`、`UnBan`、易被误杀的国内核心电商如京东域名）。
+  2. **广告与恶意软件拦截**（`REJECT`）。
+  3. **高敏感专属业务分流**（AI 服务、细分流媒体 YouTube / TikTok / Netflix / 巴哈姆特、微软服务）。
+  4. **国内应用、媒体与确定性下载直连例外**（Bilibili、网易云音乐、国内媒体、Apple、游戏平台国内/下载 CDN 直连例外）。
+  5. **特定海外服务与 Google 例外链**（游戏商店/社区、Google FCM 推送、Telegram、Cloudflare 通用挑战域、`GoogleCNProxyIP.list` 代理例外 → `GoogleCN.list` 直连白名单 → `ChinaDomain.list`）。
+  6. **通用海外代理兜底**（`Developer.list`、`ProxyMedia.list`、`ProxyGFWlist.list`）。
+  7. **国内 IP 与下载直连兜底**（`ChinaCompanyIp`、`ChinaIp`、`Download`、`GEOIP,CN,no-resolve`）。
+  8. **最终兜底**（Mihomo 原生 `MATCH` / Subconverter `[]FINAL`）。
+
+**实证遮蔽案例**：
+- `GoogleCN.list` 中的 `DOMAIN-SUFFIX,crl.pki.goog`（直连）若置于 `ProxyGFWlist.list` 之后，会被后者的父域 `DOMAIN-SUFFIX,pki.goog`（代理）遮蔽；而 `GoogleCNProxyIP.list`、`services.googleapis.cn`、`xn--ngstr-lra8j.com` 等代理例外又必须置于 `GoogleCN.list` 之前。
+- 游戏平台的国内内容与确定性下载 CDN（如 `SteamCN.list`、`steamserver.net`、`steampipe.akamaized.net` 及 Epic/Sony 下载域）必须置于 `Steam.list`、`Epic.list`、`Sony.list` 平台整体规则之前，否则会被整域后缀规则先行捕获走代理。
 
 ### 3.2 常用规则类型
 
 | 类型 | 作用 |
 |---|---|
-| `DOMAIN` | 完整域名匹配 |
-| `DOMAIN-SUFFIX` | 匹配域名自身及后缀域名，但不匹配仅包含该字符串的其他域名 |
-| `DOMAIN-KEYWORD` | 域名包含关键字 |
+| `DOMAIN` | 完整域名精确匹配 |
+| `DOMAIN-SUFFIX` | 匹配域名自身及子域名（不匹配仅含该字符串的无关域名） |
+| `DOMAIN-KEYWORD` | 域名包含子串即匹配（极易误伤，慎用） |
 | `DOMAIN-WILDCARD` | Mihomo 支持的 `*`/`?` 通配匹配 |
 | `DOMAIN-REGEX` | 域名正则匹配 |
 | `IP-CIDR` / `IP-CIDR6` | 目标 IPv4/IPv6 网段 |
-| `IP-SUFFIX` | IP 后缀范围 |
-| `IP-ASN` | 目标 IP 所属 ASN |
-| `GEOIP` | 按目标 IP 国家/地区代码 |
-| `GEOSITE` | 按 Geosite 数据库的域名分类 |
-| `PROCESS-NAME` | 按进程名（受平台支持影响） |
+| `IP-SUFFIX` / `IP-ASN` | IP 后缀范围 / 目标 IP 所属自治系统号 |
+| `GEOIP` / `GEOSITE` | 按目标 IP 国家代码 / Geosite 域名分类 |
+| `PROCESS-NAME` | 按进程名（受平台与权限限制） |
 | `DST-PORT` / `SRC-PORT` | 目标/源端口 |
 | `AND` / `OR` / `NOT` | Mihomo 复合逻辑规则 |
 | `RULE-SET` | 引用 `rule-providers` |
-| `MATCH` | 通用兜底规则 |
+| `MATCH` | Mihomo 原生通用兜底规则 |
 
-`GeoData` 是底层数据概念，不是名为 `GEODATA` 的通用路由规则类型。`geosite.dat`、`geoip.dat`、MMDB 等数据文件也不能仅凭扩展名直接当作规则提供者。
+`GeoData` 是底层数据概念，不是名为 `GEODATA` 的路由规则类型；`geosite.dat`、`geoip.dat`、MMDB 等数据文件不能仅凭扩展名直接当作 `rule-providers`。
 
-### 3.3 `no-resolve`
+### 3.3 `no-resolve` 的机制与边界
 
-`no-resolve` 只适用于目标 IP 类规则，作用是跳过该规则为判断域名目标而触发的额外解析。例如：
+`no-resolve` 仅适用于目标 IP 类规则（`IP-CIDR`、`IP-CIDR6`、`IP-ASN`、`GEOIP`），作用是当连接目标仍为域名时，**跳过为匹配该条 IP 规则而触发的本地 DNS 解析**：
 
 ```yaml
 - IP-CIDR,192.168.0.0/16,DIRECT,no-resolve
 - GEOIP,CN,DIRECT,no-resolve
-- IP-ASN,13335,PROXY,no-resolve
 ```
 
-是否需要添加取决于 DNS 模式、前置域名规则、缓存、嗅探和实际连接上下文。不能绝对表述为“所有 IP/GEOIP 规则必须加”，也不能绝对推导为“未加就一定产生本地明文 DNS 泄漏”。添加后也可能使尚未获得 IP 的请求无法通过该 IP 规则匹配。
+- **为什么常用**：若规则表后段的国内 IP / `GEOIP,CN` 规则未加 `no-resolve`，尚未命中前置域名规则的海外域名请求在匹配到该行时，会触发本地 DNS 解析以获取 IP，既增加首包延迟，也可能产生非预期的本地解析请求。
+- **边界说明**：添加 `no-resolve` 后，纯域名连接若未在前面命中域名规则且尚未解析出 IP，将直接跳过该 IP 规则进入后续 `MATCH` 兜底；因此国内常用域名必须依靠前置的 `ChinaDomain.list` 等域名规则保障直连，不能仅靠一条 `GEOIP,CN,no-resolve` 兜底所有国内流量。
 
 ### 3.4 `MATCH`、`FINAL` 与 `[]`
 
 - Mihomo 原生主配置通用兜底使用 `MATCH,策略组`。
-- `FINAL` 常见于 Subconverter 的输入语法或其他兼容格式，不能无条件写入 Mihomo `rules`。
-- `RULE-SET,名称,策略组` 需要对应 `rule-providers`，Mihomo YAML 不需要给 `RULE-SET` 加 `[]`。
-- `[]DIRECT`、`[]REJECT`、`[]策略组名` 和 `[]GEOIP` 是 Subconverter `proxy.ini` 语法，不能直接当作 Mihomo YAML 规则语法。
+- `FINAL` 是 Subconverter 输入规则或 Surge 兼容语法，经 Subconverter 转换后在 Clash/Mihomo YAML 中生成 `MATCH`。
+- `[]DIRECT`、`[]REJECT`、`[]DOMAIN`、`[]GEOIP`、`[]FINAL` 是 Subconverter `proxy.ini` 的内联规则语法，不能直接写入 Mihomo 原生 YAML 的 `rules:`。
 
-### 3.5 Rule Provider
+### 3.5 Rule Provider（Mihomo 原生）
 
 ```yaml
 rule-providers:
@@ -161,10 +165,24 @@ rule-providers:
 ```
 
 - `type`：`http`、`file`、`inline`。
-- `behavior`：`domain`、`ipcidr`、`classical`，描述规则内容类别。
-- `format`：`yaml`、`text`、`mrs`，描述文件容器/编码格式。
-- `mrs` 主要适用于 `domain` 和 `ipcidr`；`classical + mrs` 不兼容。
-- 规则仓库提供的是规则内容，不等于已经完成 `rule-providers` 定义。
+- `behavior`：`domain`、`ipcidr`、`classical`（描述规则内容类别）。
+- `format`：`yaml`、`text`、`mrs`（描述容器编码格式；`mrs` 仅适用于 `domain` 和 `ipcidr`，与 `classical` 不兼容）。
+
+### 3.6 第三方规则源选型与防污染实证
+
+主流开源规则项目各有侧重，引入前必须审查远程文件正文：
+
+| 规则源仓库 | 特点与适用场景 | 实测风险与避坑要点 |
+|---|---|---|
+| `ACL4SSR/ACL4SSR` | 经典 Clash 分流片段，适合局域网、国内域名/IP、主流流媒体、基础去广告（`BanProgramAD.list`） | `ProxyMedia.list` 含 `challenges.cloudflare.com`；`AI.list` 与媒体规则高度重叠 |
+| `blackmatrix7/ios_rule_script` | 分类极细，更新频繁，适合单一服务（如 `OpenAI.list`、`Claude.list`） | `Copilot.list` 混入 `challenges.cloudflare.com`、`www.bing.com`、`auth0.com`、`stripe.com` 及大量遥测域；`Gemini.list` 混入 `apis.google.com` 与 `DOMAIN-KEYWORD,generativelanguage` |
+| `MetaCubeX/meta-rules-dat` | Mihomo 官方维护的 GeoSite/GeoIP/MRS 数据，适合原生 `GEOSITE` 或 `mrs` provider | 需目标内核与客户端数据文件同步更新 |
+| `uklans/cache-domains` | 社区维护的 LAN 缓存确定性下载 CDN 清单（Steam/Epic/Sony 等，MIT 许可） | 仅代表下载/缓存 CDN 域名用途，不包含商店/登录主域；复用须保留 MIT 版权声明 |
+
+**防污染工程准则**：
+1. **拒绝盲目整份引入宽泛 AI 列表**：采用“纯净专用源（OpenAI/Claude）+ 核心域名精确内联（`[]DOMAIN` / `[]DOMAIN-SUFFIX`）”方案，杜绝把 `auth0.com`（通用认证）、`stripe.com`（通用支付）、`www.bing.com`（搜索）、`apis.google.com`（Google 基础 API）绑入 AI 策略组。
+2. **解耦通用验证域名**：在 `ProxyMedia.list` 之前将 `challenges.cloudflare.com` 显式指向默认海外出口（`🐟 漏网之鱼`），防止非媒体站点触发 Cloudflare 验证时跨出口失败。
+3. **控制广告源规模与格式**：超大型广告列表（如 REIJI `adblock_reject.txt` 约 595k 条 `payload:` YAML）不仅未获 Subconverter 默认 `surge` 格式解析保证，且常拦截 `statsig`、`featuregates`、`segment` 等功能开关域名导致正常业务异常；优先使用轻量可验证的 `BanProgramAD.list`。
 
 来源：
 
@@ -173,6 +191,7 @@ rule-providers:
 - Meta 规则数据：https://github.com/MetaCubeX/meta-rules-dat
 - blackmatrix7：https://github.com/blackmatrix7/ios_rule_script
 - ACL4SSR：https://github.com/ACL4SSR/ACL4SSR
+- uklans/cache-domains：https://github.com/uklans/cache-domains
 
 ---
 
@@ -180,35 +199,28 @@ rule-providers:
 
 ### 4.1 `fake-ip` 与 `redir-host`
 
-- `fake-ip`：向客户端返回虚拟 IP，并由 Mihomo 维护域名到虚拟地址的映射。
-- `redir-host`：返回真实解析得到的 IP；仍是合法模式，官方默认值为 `redir-host`。
-- Fake-IP 可以减少部分应用通过系统 DNS 直接获得真实地址的情况，但不能单独保证“远端解析”或“完全无 DNS 泄漏”。实际还受直连解析、节点域名解析、代理协议、应用自带 DoH/DoT、TUN 覆盖、IPv6 和过滤器影响。
+- **`fake-ip`**：本地发起 DNS 请求时，Mihomo 立即从虚拟地址池（默认 `198.18.0.0/16`）返回 Fake-IP 并维护映射表；连接经代理出站时将还原后的域名发往远端代理解析，可显著降低本地等待延迟并减少部分系统 DNS 污染。
+- **`redir-host`**：等待并返回真实解析得到的 IP，仍是官方合法的默认模式。
+- **防泄漏边界**：开启 `fake-ip` 不能单独保证“绝对无本地 DNS 泄漏”。实际行为仍受 `fake-ip-filter`（命中域名会回退真实解析）、节点服务器域名解析、直连规则解析、浏览器/应用自带 DoH/DoT、Android Private DNS、IPv6 及 TUN 劫持范围影响。
 
 ### 4.2 关键 DNS 字段
 
 | 字段 | 主要职责 |
 |---|---|
-| `default-nameserver` | 解析 DNS 上游服务器自身的域名；通常应使用可直达 IP |
-| `nameserver` | 普通域名常规解析 |
-| `fallback` | 普通解析的后备上游，配合 `fallback-filter` 使用 |
-| `nameserver-policy` | 按域名/通配符/GEOSITE 选择普通 DNS 上游，优先级高于普通配置 |
-| `proxy-server-nameserver` | 仅解析代理节点域名 |
-| `proxy-server-nameserver-policy` | 为代理节点域名选择专用 DNS 策略 |
-| `fake-ip-filter` | 指定哪些域名使用真实 IP 或 Fake-IP；可能让部分域名回到真实解析 |
-| `respect-rules` | 让 DNS 连接遵守路由规则；使用时需要规划代理节点解析 |
+| `default-nameserver` | 解析加密 DNS 上游服务器自身域名；必须使用可直达的纯 IP |
+| `nameserver` | 普通域名常规解析上游 |
+| `fallback` | 后备 DNS 上游，配合 `fallback-filter` 使用 |
+| `nameserver-policy` | 按域名/通配符/GEOSITE 指定 DNS 上游，优先级高于 `nameserver` |
+| `proxy-server-nameserver` | 专门解析代理节点自身的服务器域名 |
+| `proxy-server-nameserver-policy` | 为特定代理节点域名指定专用 DNS 策略 |
+| `fake-ip-filter` | 指定跳过 Fake-IP、直接返回真实 IP 的域名（如局域网、NTP、STUN、游戏连通性探测域） |
+| `respect-rules` | 让 Mihomo 自身发出的 DNS 请求遵守路由规则（启用时必须配置 `proxy-server-nameserver` 防止死锁） |
 
-`nameserver-policy` 选择的是 DNS 上游，不自动等价于“DNS 请求一定经代理”。URL 后的出站标记、`respect-rules` 和版本行为必须实际验证。
+### 4.3 DNS 劫持与验证原则
 
-### 4.3 DNS 劫持与 TUN
-
-- `any:53` 未写协议时通常按 UDP 处理；要覆盖 TCP DNS，应显式配置 `tcp://any:53`。
-- `dns-hijack` 只影响命中的、且已被 TUN/透明代理接管的连接；DoT、DoH、应用自带 DNS、Android Private DNS 等不一定能被拦截。
-- Windows/macOS、Android、虚拟网卡和安全软件存在平台限制。
-- DNS 监听在 `0.0.0.0` 会扩大暴露面，应配合绑定地址和防火墙。
-
-### 4.4 DNS 验证原则
-
-不能仅凭 `enhanced-mode: fake-ip` 宣称无泄漏。至少分别测试：系统代理/TUN、IPv4/IPv6、浏览器 DoH 开关、随机域名解析、UDP/TCP 53、853、DoH 连接、应用自带 DNS 和 WebRTC。
+- `dns-hijack` 中写 `any:53` 默认仅按 UDP 处理；如需同时劫持 TCP 53，应显式配置 `tcp://any:53`。
+- `dns-hijack` 只对已被 TUN/透明代理接管的传统 53 端口流量生效，无法直接解密拦截应用内建的 DoH/DoT。
+- 验证 DNS 时需分别测试：系统代理模式与 TUN 模式、IPv4 与 IPv6、浏览器安全 DNS（DoH）开关、UDP/TCP 53、WebRTC 以及客户端连接面板中的 `dns` 出站记录。
 
 来源：
 
@@ -225,7 +237,7 @@ rule-providers:
 ```yaml
 tun:
   enable: true
-  stack: gvisor
+  stack: mixed
   dns-hijack:
     - any:53
     - tcp://any:53
@@ -234,16 +246,13 @@ tun:
   strict-route: true
 ```
 
-`stack` 可选 `system`、`gvisor`、`mixed`；官方默认值和各版本实现应核对，不能把 `system` 写成普遍“性能最高”，也不能把 `mixed/gvisor` 写成普遍“兼容性最佳”。
+- `stack` 可选 `system`、`gvisor`、`mixed`；不同操作系统版本、防火墙与网卡驱动下的吞吐及兼容性需实测确认，不宜绝对化。
+- `auto-route` 自动配置系统路由表，但不保证虚拟机、容器、绑定特定物理网卡的程序或自定义路由全部被接管。
+- `strict-route` 可减少部分多网卡旁路泄漏，但可能影响 VirtualBox / VMware / WSL 等虚拟网络桥接。
 
-- `auto-route` 自动设置路由，但不保证应用、虚拟机、容器、IPv6 或自定义路由全部被接管。
-- `strict-route` 可减少部分旁路，但可能影响 VirtualBox 等虚拟化网络；它不是绝对无泄漏保证。
-- `auto-redirect` 依赖 `auto-route`，且平台支持范围有限。
-- TUN 开启后仍需检查系统防火墙、虚拟网卡、IPv6 默认路由和应用过滤。
+### 5.2 Sniffer（域名嗅探）
 
-### 5.2 Sniffer
-
-Mihomo 当前主要支持 HTTP、TLS、QUIC 嗅探，可按协议和端口配置。Sniffer 不是通用“从任意 IP 还原域名”的工具：ECH、应用层加密、非标准协议、未覆盖端口和直接 IP 连接都可能无法识别。识别出域名后是否改写目标还取决于 `override-destination`；该字段的默认行为存在文档/版本差异时，以目标版本实测为准。
+Mihomo 支持对 HTTP、TLS（SNI）、QUIC 流量进行域名嗅探。当客户端直接向 IP（或 Fake-IP 映射丢失后的地址）发起连接时，Sniffer 可辅助还原目标域名以匹配域名规则；但对启用 ECH（Encrypted Client Hello）、非标准协议、未覆盖端口或纯 IP 通信无能为力。
 
 ---
 
@@ -251,23 +260,19 @@ Mihomo 当前主要支持 HTTP、TLS、QUIC 嗅探，可按协议和端口配置
 
 ### 6.1 选型原则
 
-| 需求 | 可优先研究 | 主要代价 |
+| 需求场景 | 可优先研究 | 主要代价与前提 |
 |---|---|---|
-| 通用兼容性 | HTTP、SOCKS、Shadowsocks、VMess、Trojan | UDP/高级链路能力有限 |
-| TCP 稳定性 | VLESS TCP、Trojan、Shadowsocks | 弱网吞吐未必最佳 |
-| UDP/QUIC 可用且追求吞吐 | Hysteria2、TUIC | 依赖 UDP、MTU、NAT、服务端实现 |
-| 全局网段/设备互联 | WireGuard | 属于隧道/路由体系，管理复杂 |
-| 前置中转 | 节点级 `dialer-proxy` | 增加延迟和故障点 |
+| 通用兼容与穿透 | VMess (WS/TLS)、Trojan、VLESS (TCP/WS)、Shadowsocks | 弱网或高丢包下 TCP 队头阻塞明显 |
+| 抗特征识别与直连稳定 | VLESS Reality (Vision) | 依赖服务端证书/SNI/ShortID 严格匹配 |
+| 高吞吐与弱网 UDP 加速 | Hysteria2、TUIC | 依赖全链路 UDP 畅通；受运营商 QoS/UDP 限速影响大 |
+| 异地组网与网段路由 | WireGuard | 属于三层隧道体系，MTU 与路由管理复杂 |
+| 链式前置落地 | 节点级 `dialer-proxy` | 增加首包延迟、故障点与排障复杂度 |
 
 ### 6.2 重要边界
 
-- `udp: true` 只表示客户端配置允许 UDP，不能证明服务端、网络、防火墙和 TUN 全链路支持 UDP。
-- QUIC 不必然更快；UDP 受限或丢包严重时 TCP 可能更稳定。
-- VLESS Reality 的 UUID、公钥、Short ID、SNI、Flow 和证书校验必须与服务端匹配；不要把 `skip-cert-verify` 当长期修复方案。
-- Hysteria2/TUIC 的速率、拥塞控制和 MTU 参数应接近实际链路，不能盲目调大。
-- TUIC 0-RTT/`reduce-rtt` 有重放风险，敏感、不可重复提交的业务不应仅为降延迟启用。
-- WireGuard 的 `allowed_ips`、MTU、DNS、NAT 保活和密钥管理必须一起设计。
-- `dialer-proxy` 配在具体代理节点上；多跳不是默认性能优化手段。
+- 节点配置 `udp: true` 仅代表客户端允许转发 UDP，不代表服务端、中间链路、NAT 和防火墙全链路支持 UDP。
+- 严禁将 `skip-cert-verify: true` 作为长期修复手段；TLS/Reality 握手失败应排查服务端配置、系统时间或本地中间人干扰。
+- TUIC 0-RTT（`reduce-rtt`）存在重放风险，对交易、认证等非幂等业务不应盲目开启。
 
 来源：
 
@@ -275,149 +280,169 @@ Mihomo 当前主要支持 HTTP、TLS、QUIC 嗅探，可按协议和端口配置
 - VLESS：https://wiki.metacubex.one/config/proxies/vless/
 - Hysteria2：https://wiki.metacubex.one/config/proxies/hysteria2/
 - TUIC：https://wiki.metacubex.one/config/proxies/tuic/
-- QUIC RFC：https://www.rfc-editor.org/rfc/rfc9000
-- WireGuard：https://www.wireguard.com/
 
 ---
 
-## 7. Subconverter `proxy.ini`
+## 7. Subconverter `proxy.ini` 规范与源码级边界
 
-### 7.1 语法边界
+### 7.1 核心语法
 
-典型策略组格式：
+1. **策略组定义（`custom_proxy_group`）**：
+   - `select`（手动选择）：
+     `custom_proxy_group=组名`select`[]引用组或内置目标`节点名称正则...`
+   - `url-test` / `fallback`（自动测速 / 故障转移）：
+     `custom_proxy_group=组名`url-test`节点名称正则`测速URL`interval[,timeout][,tolerance]`
+     *注：尾字段为三段式（间隔秒、超时毫秒、容差毫秒）。若仅设 600 秒间隔与 150 毫秒容差，必须保留中间空位写为 `600,,150`（依据官方 `pref.example.ini` 与 v0.9.0 输出核实）。*
+   - `load-balance`（负载均衡）：
+     `custom_proxy_group=组名`load-balance`节点名称正则`测速URL`interval[,timeout][,tolerance]`策略(consistent-hashing|round-robin)`
+   - **反引号分隔符**：`select` 通常有 2 个反引号，`url-test`/`fallback` 通常有 4 个，`load-balance` 通常有 4–5 个；不能用“反引号总数必须为偶数”判断语法合法性。
 
-```ini
-custom_proxy_group=🚀 节点选择`select`[]♻️ 自动选择`.*`DIRECT
-custom_proxy_group=♻️ 自动选择`url-test`节点正则`http://www.gstatic.com/generate_204`300,,50
-custom_proxy_group=⚖️ 负载均衡`load-balance`节点正则`http://www.gstatic.com/generate_204`300`consistent-hashing
-```
+2. **规则集定义（`ruleset`）**：
+   - **内联单条规则**：`ruleset=目标策略组,[]规则类型,参数[,附加参数]`（如 `ruleset=DIRECT,[]GEOIP,CN,no-resolve`、`ruleset=🐟 漏网之鱼,[]FINAL`）。
+   - **远程规则列表**：`ruleset=目标策略组,[type:]URL[,interval]`。未指定 `type:` 时默认按 `surge` 规则集格式解析（兼容常见 `DOMAIN`/`DOMAIN-SUFFIX`/`IP-CIDR` 文本行）。
+   - **生成控制开关**：`enable_rule_generator=true` 与 `overwrite_original_rules=true` 必须同时开启，转换器才会用当前 `.ini` 的规则覆盖原订阅规则。
 
-- `[]策略组名`、`[]DIRECT`、`[]REJECT` 表示引用已有策略组/内置目标。
-- 不带 `[]` 的筛选项通常作为节点名正则。
-- `ruleset=目标,地址` 引入远程规则；`[]GEOIP`、`[]FINAL` 等是转换器输入语法。
-- `enable_rule_generator=true` 启用规则生成；`overwrite_original_rules=true` 覆盖原始规则。两者只在通过 Subconverter 外部配置加载时有意义。
-- `300,,50` 表示填写间隔与容差但留下 timeout 空位，语法可被转换器接受，但最终生成配置要再做内核校验。
+### 7.2 源码级转换行为与避坑指南
 
-### 7.2 规则源与正则
-
-- 默认规则格式、`surge`/`clash-classic` 等解释属于 Subconverter 语境，不应套用到 Mihomo `rule-providers`。
-- 远程 URL 返回 HTTP 200 不等于规则内容格式正确、语义正确或长期可用。
-- 正则应避免过宽匹配：单独使用 `AI` 可能误匹配 `TAIWAN`、`EMAIL`；`[^-]日` 也可能匹配大量非日本节点。优先使用边界、完整地区词和排除公告/流量信息的负向条件。
-- `select .*` 合法但会把全部节点纳入手动组；节点名、代理组和无效信息混杂时应审查候选范围。
+- **无节点空分组自动补 `DIRECT`（官方源码实现）**：
+  Subconverter 在导出 Clash 策略组时，若某个分组既无 provider 且正则未匹配到任何节点，会自动向该组填入 `DIRECT`（见 `src/generator/config/subexport.cpp#L643-L654`）。因此“配置转换不报错、分组引用完整”绝不等于“分组内有可用节点”，必须用真实或代表性节点名校验匹配结果。
+- **正则匹配对象与大小写敏感**：
+  - 筛选器默认采用 C++ `std::regex`（ECMAScript 语法）且**区分大小写**。
+  - 正则直接匹配订阅解码后的**完整节点显示名**（包含前缀国旗 emoji、空格与中文）。若供应商为节点加上国旗 emoji（如 `🇳🇱 NL-...`），紧贴行首的 `^NL-` 会全部落空；若节点在原始订阅中缺失名称片段，任何名称正则都无法选中它。
+  - 使用 `.*` 全选可避免供应商改名或换家族造成空组；若需按关键词匹配，应避免裸写 `AI`（会误匹配 `TAIWAN`、`MAINLAND`、`EMAIL`）或 `[^-]日` 等过宽表达式。
+- **`exclude_remarks=` 空值陷阱**：
+  在本地运行 Subconverter 或构造转换参数时，若保留空的 `exclude_remarks=`，转换器会将其按空正则处理从而匹配并**排除所有节点**；需要禁用排除过滤时，应删除该配置项或填入不会命中正常名称的表达式。
+- **远程规则格式兼容性**：
+  HTTP 返回 200 不代表内容可被正确导入。例如带 `payload:` 顶层键的 Clash YAML 规则集在未声明类型时，Subconverter 默认按 `surge` 行格式解析可能失效或产生异常规则。
 
 来源：
 
-- Subconverter README：https://github.com/tindy2013/subconverter/blob/master/README-cn.md
-- 官方模板：https://raw.githubusercontent.com/tindy2013/subconverter/master/base/config/ACL4SSR_Online.ini
-- ACL4SSR：https://github.com/ACL4SSR/ACL4SSR
+- Subconverter 仓库与文档：https://github.com/tindy2013/subconverter/blob/master/README-cn.md
+- Subconverter 空分组处理源码：https://github.com/tindy2013/subconverter/blob/a0d4eab28cb8b6c782d4ce5c3a918de4829b4a72/src/generator/config/subexport.cpp#L643-L654
 
 ---
 
-## 8. 业务分流的设计原则
+## 8. 业务分流与 Cloudflare 验证排查
 
-- **AI 服务**：优先固定、稳定、地区符合要求的出口；不要默认使用会改变出口 IP 的轮询。具体服务的可用性和地区限制必须实测。
-- **Netflix/流媒体**：解锁能力依赖出口 IP、服务地区和节点侧策略；测速 URL 成功不等于解锁成功。
-- **YouTube/下载**：主要关注带宽、晚高峰、连接稳定性；业务分流和测速组要区分。
-- **TikTok 等地区敏感业务**：出口地区、DNS、时区/语言和客户端行为都可能影响结果，不应只看节点名称。
-- **Telegram/实时通信/游戏**：检查 UDP 能力、NAT、丢包、延迟抖动和会话保持。
-- **国内服务**：域名/IP/媒体规则可能重叠，必须用最终规则顺序确认；“国内媒体”不必然全部 DIRECT。
-- **游戏平台**：商店、登录、联机和下载 CDN 可能需要不同策略；不要把全平台粗暴指向同一出口。
+### 8.1 核心业务分流原则
 
-业务分类是配置设计方法，不是内核保证；规则命中、出口能力和实际服务响应要分别验证。
+- **AI 服务（OpenAI / Claude / Gemini / Copilot / Perplexity / Grok）**：对出口地区与会话 IP 稳定性要求极高，默认应由用户手选固定节点，避免因测速波动或轮询频繁切换出口 IP。
+- **Netflix / TikTok / 区域流媒体**：解锁取决于出口 IP 归属地、原生/家宽属性及服务端解锁策略，测速延迟低不代表能解锁，默认以手选节点为主。
+- **YouTube / 通用海外访问**：重点关注带宽与可用性，可默认引用低频高容差（`600,,150`）的 `♻️ 自动选择` 组。
+- **国内服务与 Apple**：固定 `DIRECT` 直连，并置于宽泛海外规则（`Developer.list`、`ProxyMedia.list`、`ProxyGFWlist.list`）之前，避免国内流量绕行代理。
+- **游戏平台与消息推送**：
+  - 将确定性的国内内容与大文件下载 CDN（`SteamCN.list`、`steamserver.net`、`steampipe.akamaized.net` 及 `uklans/cache-domains` 确证的 Epic/Sony 下载域）置前 `DIRECT` 直连；
+  - 将商店、社区、登录与 Google FCM 推送（`Steam.list`、`Epic.list`、`Sony.list`、`GoogleFCM.list`，含 FCM 的 IP 规则）交由 `🐟 漏网之鱼` 代理，避免锁死直连导致商店打不开或推送断连。
+
+### 8.2 Cloudflare 验证（Managed Challenge / Turnstile）机制与排查
+
+根据 Cloudflare 官方文档，Managed Challenge 的验证通过率与以下因素直接相关：
+
+1. **原始请求与解题请求的出口 IP 一致性**：
+   Cloudflare 明确指出，若触发挑战的页面请求与加载/提交挑战（如 `challenges.cloudflare.com`）的请求来自不同 IP，验证解题可能失效并陷入循环验证。
+   - **配置侧修复**：切勿让 `ProxyMedia.list` 将 `challenges.cloudflare.com` 绑死到媒体组，也不要将其强绑到单一业务组；应在媒体规则前单列归入默认海外出口（或排查时将相关业务组与默认出口设为同一节点）。
+2. **代理入口（“套 CDN”）与真实出口 IP 的区别**：
+   节点名称中的“CDN / 家宽 / 原生解锁”通常只描述客户端到代理入口的中转方式或命名标签，不决定目标网站看到的落地出口 IP；即使客户端固定手选同一节点，部分供应商后端仍可能动态轮换出口 IP。
+3. **标准单变量排查流程**：
+   - 保持同一浏览器、同一站点、同一隐私/扩展设置，每次仅调整一个变量；
+   - 先将 `🤖 AI服务`、`🌍 国外媒体`、`🐟 漏网之鱼` 临时选为同一个实测稳定的节点，排除分流规则导致的跨出口问题；
+   - 核查出口 IP 是否被多人高频共享触发信誉风控、浏览器是否拦截了挑战脚本或隐私通行证（Privacy Pass）Token。
+
+来源：
+
+- Cloudflare Challenges 工作原理：https://developers.cloudflare.com/cloudflare-challenges/concepts/how-challenges-work/
+- Cloudflare 故障排查：https://developers.cloudflare.com/cloudflare-challenges/troubleshooting/
+- Challenge Solve Issues：https://developers.cloudflare.com/cloudflare-challenges/troubleshooting/challenge-solve-issues/
 
 ---
 
 ## 9. 性能、稳定性与安全
 
-### 9.1 性能字段不要混淆
+### 9.1 性能字段辨析
 
-- `tcp-concurrent`：对 DNS 返回的多个地址并发拨号，采用先成功连接；主要影响首连等待，不是连接复用。
-- TCP Keep Alive：探测/保持空闲连接。
-- `smux`/multiplex：在底层连接承载多个 TCP 流，和 `tcp-concurrent` 不同。
-- Snell `reuse` 有未确认的连接长期保持报告，不能无条件推荐。
-- 官方未给出规则数量、MRS 必然性能优势或策略组数量的统一阈值；用基准测试替代猜测。
+- `tcp-concurrent`：对 DNS 返回的多个目标 IP 并发发起 TCP 握手，采用最先建立的连接；主要优化首连等待，不属于连接复用。
+- TCP Keep Alive：探测并维持空闲 TCP 连接。
+- `smux` / multiplex：在单条底层传输连接上多路复用多个流，与 `tcp-concurrent` 机制不同。
 
-### 9.2 控制面和监听面
+### 9.2 控制面与凭据安全
 
-- `allow-lan: true` 允许其他设备使用代理端口，不等于只允许可信局域网；需结合 `bind-address` 和防火墙。
-- `external-controller` 是高权限 REST API 控制面，默认应绑定回环地址；不要直接暴露公网。
-- `secret` 主要保护 API HTTP 访问，不是所有 Unix socket、Windows named pipe 或外部 DoH 入口的通用认证。
-- `dns.listen: 0.0.0.0:端口` 会扩大 DNS 服务暴露面。
-- 调试可提高日志级别，长期运行避免无必要的 `debug`，并注意域名、节点名和内部地址泄露。
-- 凭据（订阅链接、UUID、密码、Reality 私钥、WireGuard 私钥、API secret）不得进入公开仓库、截图、日志或报告。
+- `allow-lan: true` 允许局域网设备接入代理端口，开启时应配合 `bind-address` 与系统防火墙。
+- `external-controller` 为高权限 REST API，应绑定 `127.0.0.1` 回环地址并设置 `secret`，严禁直接暴露公网。
+- **脱敏铁律**：订阅链接、节点真实服务器 IP/端口、UUID、密码、Reality 私钥、API secret 严禁写入公开仓库、配置注释、测试夹具或报告。
 
-### 9.3 IPv6
+### 9.3 IPv6 边界
 
-官方默认值、客户端行为和 TUN 支持必须按目标版本确认。`ipv6: false` 可以作为特定环境的选择，但不是普遍默认或安全保证。关闭 IPv6 不能替代 DNS、TUN、WebRTC 和应用自带 DNS 检查；开启 IPv6 则必须验证 AAAA 流量是否同样经过预期出口。
-
-来源：
-
-- 全局配置：https://wiki.metacubex.one/config/general/
-- API：https://wiki.metacubex.one/api/
-- 代理配置：https://wiki.metacubex.one/config/proxies/
+`ipv6: false` 仅控制内核相关解析或入站行为，不能替代系统网卡、路由器 RA、WebRTC 与应用自带 DoH 的 IPv6 检查；开启 IPv6 时则必须验证 AAAA 流量是否同样命中预期分流规则与出口。
 
 ---
 
-## 10. 可重复验证与排障清单
+## 10. 订阅解码与四层可重复验证体系
 
-### 10.1 配置静态检查
+### 10.1 订阅链接解码规范（内存脱敏）
 
-1. 用目标 Mihomo 版本校验完整生成 YAML。
-2. 检查所有策略组引用是否已定义、是否循环引用、是否有空候选。
-3. 检查规则组目标是否存在，规则源的 `behavior`/`format` 是否与实际内容一致。
-4. 检查正则是否过宽、转义是否正确、反引号是否成对。
-5. 检查 `MATCH` 是否位于预期末尾；不要把 Subconverter `FINAL` 直接当 Mihomo `MATCH`。
+- `vmess://`：载荷为 **URL-safe Base64** 编码的 JSON，必须使用 `base64.urlsafe_b64decode`（补齐 `=` padding 后解码），节点显示名取 JSON 中的 `ps` 字段。
+- `vless://` / `trojan://` / `ss://`：节点显示名通常位于 URL 末尾 `#fragment`，必须使用 `urllib.parse.unquote` 解码，并完整保留其中的 UTF-8 国旗 emoji、空格与中文字符。
+- 解码后应先核对节点总条数，防止终端或日志截断长文本导致漏算。
 
-### 10.2 功能 A/B 测试
+### 10.2 四层验证矩阵
 
-- 单节点直连、单节点代理、自动组、故障转移分别测试。
-- 记录测试 URL 延迟与真实业务可用性，不把二者混为一谈。
-- 对 UDP 业务测试 TCP 备用节点、UDP 节点、TUN 和非 TUN 路径。
-- 对 DNS 测试 Fake-IP 过滤域名、系统代理/TUN、浏览器 DoH、IPv4/IPv6 和抓包。
-- 对会话敏感业务测试手动、`consistent-hashing`、`sticky-sessions` 与 `round-robin` 的出口变化。
+| 验证层级 | 验证工具与方法 | 能证明什么 | 不能证明什么 |
+|---|---|---|---|
+| **1. 离线静态与集合回归** | 运行 `py -3 -B scripts/test/test_proxy_ini.py` | 策略组定义、无空组、默认首项、无循环引用、规则去重、关键父子域与防污染顺序契约 | 远程 URL 当前可达性、Subconverter 实际导出、目标内核兼容性 |
+| **2. 本地转换校验** | 回环地址运行 Subconverter 转换合成节点 | `.ini` 语法、正则在 C++ `std::regex` 下的实际分组结果、远程规则拉取与展开后首命中 | 真实订阅节点连通性与业务解锁 |
+| **3. 内核配置投影校验** | 设置 `MIHOMO_BIN` 运行 `mihomo -t -d <dir> -f <file>` | 目标 Mihomo 版本对生成的策略组类型、测速参数与 UTF-8 名称的解析合法性 | 完整远程规则集行为、DNS/TUN 系统接管效果 |
+| **4. 真实客户端与业务 A/B** | 客户端连接面板 + 目标站点同条件单变量对照 | 规则实际命中、DNS/TUN 接管、出口 IP 稳定性、AI/流媒体/Cloudflare 真实可用性 | 未来供应商后端路由变更后的持续可用性 |
 
-### 10.3 常见症状定位
-
-- **OpenAI/Cloudflare 访问异常**：先核查出口 IP、会话是否换出口、挑战域名规则、DNS 和证书校验；不要直接归因于某个策略组类型。
-- **国内网页变慢**：核查国内规则顺序、DNS 策略、`no-resolve` 使用场景、直连 DNS 和 TUN 路由。
-- **视频画质/解锁异常**：分别检查带宽、出口地区、节点解锁、DNS 和业务规则，不要只看测速延迟。
-- **配置转换失败**：检查远程 URL 内容、规则格式、正则、特殊字符和转换器版本；HTTP 200 不是格式正确证明。
-- **TUN 开启后断网**：检查权限、防火墙、stack、严格路由、虚拟网卡、IPv6 和 DNS 劫持覆盖范围。
+**内核校验工程要点**：
+- Windows 命令行参数存在约 32KB 长度上限（`WinError 206`），节点较多时不可使用内联参数，必须写入独立临时目录的 UTF-8 文件并通过 `-t -d <目录> -f <文件>` 校验。
+- 用 Python `json.dumps` 生成 YAML 兼容配置时，必须指定 `ensure_ascii=False` 直接输出 UTF-8 字符，避免将策略组或节点名中的 emoji（非 BMP 字符）转义为 YAML 解析器不支持的 UTF-16 代理对（如 `\ud83c...`）。
 
 ---
 
-## 11. 本项目 `proxy.ini` 当前审计摘要（2026-08-27）
+## 11. 本项目 `proxy.ini` 当前架构与审计摘要（2026-10-25）
 
-静态检查结果：36 个策略组、40 个 ruleset；所有 `[]` 策略组引用均能在文件中找到定义；反引号无明显缺失；远程规则 URL 当前均返回 HTTP 200，测速 URL 返回 HTTP 204。上述只是当前时点的可达性/静态结果，不代表规则格式、节点实际存在或业务解锁成功。
+### 11.1 策略组架构（7 个业务组 + 1 个自动组）
 
-需要后续验证的项目：
+- **全选策略**：全部 8 个组均使用 `.*` 匹配所有导入节点，彻底消除因供应商改名、新增家族或添加国旗 emoji 导致的空组风险。
+- **分组清单与默认首项**：
+  1. `🤖 AI服务`（`select`）：`.*` → `[]♻️ 自动选择`（默认手选首节点）
+  2. `📹 油管视频`（`select`）：`[]♻️ 自动选择` → `.*`（默认自动优选）
+  3. `🎵 TikTok`（`select`）：`.*` → `[]♻️ 自动选择`（默认手选首节点）
+  4. `🌍 国外媒体`（`select`）：`.*` → `[]♻️ 自动选择`（默认手选首节点）
+  5. `🎥 奈飞视频`（`select`）：`.*` → `[]♻️ 自动选择`（默认手选首节点）
+  6. `Ⓜ️ 微软服务`（`select`）：`[]DIRECT` → `[]♻️ 自动选择` → `.*`（默认直连）
+  7. `🐟 漏网之鱼`（`select`）：`[]♻️ 自动选择` → `.*` → `[]DIRECT`（默认自动优选，保留直连备选）
+  8. `♻️ 自动选择`（`url-test`）：`.*`，测速地址 `https://www.gstatic.com/generate_204`，参数 `600,,150`
 
-1. `300,,50` 的空 timeout 应在目标转换器和 Mihomo 版本上验证最终输出。
-2. `consistent-hashing`/`round-robin` 需按目标内核验证，旧 Clash 可能不兼容。
-3. 负向前瞻正则和 `[^-]日` 可能造成节点误匹配。
-4. `ruleset` 默认按 Subconverter 语境解释，远程文件需确认实际格式与转换结果。
-5. `🚀 测速选择` 的 ruleset 与 `select .*` 的组语义可能冗余。
-6. `🎯 全球直连` 当前可切换到代理组，并非纯 `DIRECT`；命名可能造成误解。
-7. 同一目标的多个 AI/国内/媒体 ruleset 合法，但必须检查重叠与先后顺序。
-8. 不修改现有 `proxy.ini` 前，不应把上述风险当作已修复结论。
+### 11.2 规则分段结构（9 段共 65 条 `ruleset=`）
+
+1. **基础直连与京东白名单**：`5.5.5.5/32`、`LocalAreaNetwork.list`、`UnBan.list` 及京东 6 个核心域名后缀直连。
+2. **广告拦截**：单一 `ACL4SSR/BanProgramAD.list` 直接指向内置 `REJECT`。
+3. **AI 专属分流**：`blackmatrix7` 的 `OpenAI.list`、`Claude.list` + Google AI Studio / Gemini / Copilot / Perplexity / xAI / Grok 共 11 条精确/后缀内联规则，指向 `🤖 AI服务`。
+4. **视频与微软专用规则**：`YouTube.list`、`TikTok.list`、`Netflix.list`、`Bahamut.list`、`OneDrive.list`、`Microsoft.list` 分别指向对应业务组。
+5. **国内应用与苹果服务**：`BilibiliHMT.list`、`Bilibili.list`、`NetEaseMusic.list`、`ChinaMedia.list`、`Apple.list` 固定指向 `DIRECT`。
+6. **游戏下载直连与平台/推送代理**：`SteamCN.list`、Steam 下载域及 `uklans/cache-domains`（MIT 许可见 `规则数据许可.txt`）的 Epic/Sony 确定性下载域置前 `DIRECT`；`Epic.list`、`Sony.list`、`Steam.list`、`GoogleFCM.list` 指向 `🐟 漏网之鱼`。
+7. **海外例外、国内白名单与通用代理**：`Telegram.list`、`challenges.cloudflare.com`、`nodeseek.com`、Google 代理例外（`xn--ngstr-lra8j.com`、`services.googleapis.cn`、`GoogleCNProxyIP.list`）在先 → `GoogleCN.list`、`ChinaDomain.list` 直连居中 → `Developer.list`、`ProxyMedia.list`、`ProxyGFWlist.list` 通用海外规则在后。
+8. **国内 IP 与下载直连兜底**：`ChinaCompanyIp.list`、`ChinaIp.list`、`Download.list`、`[]GEOIP,CN,no-resolve` 指向 `DIRECT`。
+9. **最终兜底**：`ruleset=🐟 漏网之鱼,[]FINAL`。
 
 ---
 
 ## 12. 主要来源索引
 
-- Mihomo 文档：https://wiki.metacubex.one/config/
-- Mihomo 源码：https://github.com/MetaCubeX/mihomo
-- Mihomo Meta 文档：https://github.com/MetaCubeX/Meta-Docs
-- Mihomo 规则：https://wiki.metacubex.one/config/rules/
+- Mihomo 文档总览：https://wiki.metacubex.one/config/
+- Mihomo 源码仓库：https://github.com/MetaCubeX/mihomo
+- Mihomo 规则文档：https://wiki.metacubex.one/config/rules/
 - Mihomo Rule Providers：https://wiki.metacubex.one/config/rule-providers/
-- Mihomo 策略组：https://wiki.metacubex.one/config/proxy-groups/
-- Mihomo DNS：https://wiki.metacubex.one/config/dns/
-- Mihomo TUN：https://wiki.metacubex.one/config/inbound/tun/
-- Mihomo Sniffer：https://wiki.metacubex.one/config/sniff/
-- Mihomo 代理协议：https://wiki.metacubex.one/config/proxies/
-- Subconverter：https://github.com/tindy2013/subconverter
-- ACL4SSR：https://github.com/ACL4SSR/ACL4SSR
-- blackmatrix7：https://github.com/blackmatrix7/ios_rule_script
-- Meta 规则数据：https://github.com/MetaCubeX/meta-rules-dat
-- BrowserLeaks DNS：https://browserleaks.com/dns
-- IPLeak：https://ipleak.net/
+- Mihomo 策略组文档：https://wiki.metacubex.one/config/proxy-groups/
+- Mihomo DNS 文档：https://wiki.metacubex.one/config/dns/
+- Mihomo TUN 文档：https://wiki.metacubex.one/config/inbound/tun/
+- Mihomo Sniffer 文档：https://wiki.metacubex.one/config/sniff/
+- Mihomo 代理协议文档：https://wiki.metacubex.one/config/proxies/
+- Subconverter 仓库：https://github.com/tindy2013/subconverter
+- ACL4SSR 规则仓库：https://github.com/ACL4SSR/ACL4SSR
+- blackmatrix7 规则仓库：https://github.com/blackmatrix7/ios_rule_script
+- uklans/cache-domains 仓库：https://github.com/uklans/cache-domains
+- Cloudflare Challenges 文档：https://developers.cloudflare.com/cloudflare-challenges/
+- BrowserLeaks DNS 测试：https://browserleaks.com/dns
+- IPLeak 测试：https://ipleak.net/

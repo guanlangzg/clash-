@@ -35,8 +35,8 @@ NODES = (
     "🇸🇬 三网优化SG伪家宽-解锁-cdn",
 )
 BUSINESS_GROUPS = (
-    "🤖 AI服务", "📹 油管视频", "🎵 TikTok", "🌍 国外媒体",
-    "🎥 奈飞视频", "Ⓜ️ 微软服务", "🐟 漏网之鱼",
+    "🤖 AI服务", "💬 社区论坛", "🪙 加密与支付", "📲 电报消息", "📹 油管视频",
+    "🎵 TikTok", "🌍 国外媒体", "🎥 奈飞视频", "Ⓜ️ 微软服务", "🐟 漏网之鱼",
 )
 AUTO_GROUP = "♻️ 自动选择"
 ALL_GROUPS = BUSINESS_GROUPS + (AUTO_GROUP,)
@@ -44,6 +44,55 @@ ALL_NODES_SELECTOR = ".*"
 TEST_URL = "https://www.gstatic.com/generate_204"
 JD_DOMAINS = (
     "jd.com", "360buy.com", "360buyimg.com", "jdcloud.com", "jdpay.com", "jcloudcs.com",
+)
+AD_UNBAN_RULES = (
+    "DIRECT,[]DOMAIN,wxsnsdy.wxs.qq.com",
+    "DIRECT,[]DOMAIN,wxsnsdythumb.wxs.qq.com",
+    "DIRECT,[]DOMAIN-SUFFIX,act.qq.com",
+    "DIRECT,[]DOMAIN-SUFFIX,img1.126.net",
+    "DIRECT,[]DOMAIN-SUFFIX,img2.126.net",
+    "DIRECT,[]DOMAIN-SUFFIX,mimg.126.net",
+    "DIRECT,[]DOMAIN-SUFFIX,g.click.taobao.com",
+    "DIRECT,[]DOMAIN-SUFFIX,ai.m.taobao.com",
+    "DIRECT,[]DOMAIN-SUFFIX,re.m.taobao.com",
+)
+TELEGRAM_EXTRA_RULES = (
+    "📲 电报消息,[]DOMAIN-SUFFIX,cdn-telegram.org",
+    "📲 电报消息,[]DOMAIN-SUFFIX,telegram-cdn.org",
+    "📲 电报消息,[]DOMAIN-SUFFIX,fragment.com",
+    "📲 电报消息,[]DOMAIN-SUFFIX,tx.me",
+    "📲 电报消息,[]DOMAIN-SUFFIX,tg.dev",
+    "📲 电报消息,[]DOMAIN-SUFFIX,graph.org",
+    "📲 电报消息,[]DOMAIN-SUFFIX,legra.ph",
+    "📲 电报消息,[]DOMAIN-SUFFIX,comments.app",
+    "📲 电报消息,[]DOMAIN-SUFFIX,quiz.directory",
+    "📲 电报消息,[]IP-CIDR,91.105.192.0/23,no-resolve",
+    "📲 电报消息,[]IP-CIDR,185.76.151.0/24,no-resolve",
+    "📲 电报消息,[]IP-CIDR,5.28.192.0/18,no-resolve",
+    "📲 电报消息,[]IP-CIDR6,2001:b28:f23c::/48,no-resolve",
+    "📲 电报消息,[]IP-CIDR6,2a0a:f280::/32,no-resolve",
+)
+CRYPTO_PAYMENT_EXTRA_DOMAINS = (
+    "bycsi.com", "bytick.com", "byabcde.com", "bybbi.com", "byd3c3.com",
+    "bitget.com", "bitgetapp.com", "htx.com", "hyperliquid.xyz",
+    "wise.com", "revolut.com", "airwallex.com",
+    "dupay.one", "onekey.so", "pokepay.cc", "redotpay.com",
+)
+FORUM_DOMAINS = (
+    "nodeseek.com", "nodeimage.com", "deepflood.com", "nodequality.com",
+    "linux.do", "idcflare.com", "v2ex.com", "v2ex.co", "hostloc.com",
+    "2libra.com", "lowendtalk.com", "lowendspirit.com", "lowendbox.com",
+    "1lou.me", "xdaforums.com", "reddit.com", "redd.it", "redditmedia.com",
+    "redditstatic.com", "discord.com", "discordapp.com", "discordapp.net",
+    "discord.gg", "discord.media", "discordcdn.com", "x.com", "twitter.com",
+    "t.co", "twimg.com",
+)
+DOMESTIC_SUPPLEMENT_DOMAINS = (
+    "xn--zfr164b",
+    "deepseek.com", "kimi.com", "qianwen.com", "tongyi.com", "stepfun.com",
+    "minimaxi.com", "minimax.io", "hailuoai.com",
+    "kurogames.com", "hypergryph.com", "hg-cdn.com",
+    "xhslink.com", "inkuai.com",
 )
 EPIC_DOWNLOAD_DOMAINS = (
     "cdn.unrealengine.com", "cdn1.epicgames.com", "cdn1.unrealengine.com",
@@ -112,7 +161,7 @@ class ProxyIniTests(unittest.TestCase):
         cls.sources = {rule.rsplit("/", 1)[-1]: (index, rule.split(",", 1)[0])
                        for index, rule in enumerate(cls.rules) if ",https://" in rule}
 
-    def test_only_seven_business_groups_and_one_auto_group_exist(self):
+    def test_only_ten_business_groups_and_one_auto_group_exist(self):
         self.assertEqual(tuple(self.groups), ALL_GROUPS)
 
     def test_business_groups_are_manual_without_extra_manual_twins(self):
@@ -130,7 +179,7 @@ class ProxyIniTests(unittest.TestCase):
                 expected = [ALL_NODES_SELECTOR, f"[]{AUTO_GROUP}"]
                 if name == "Ⓜ️ 微软服务":
                     expected = ["[]DIRECT", f"[]{AUTO_GROUP}", ALL_NODES_SELECTOR]
-                elif name in ("📹 油管视频", "🐟 漏网之鱼"):
+                elif name in ("📲 电报消息", "📹 油管视频", "🐟 漏网之鱼"):
                     expected = [f"[]{AUTO_GROUP}", ALL_NODES_SELECTOR]
                     if name == "🐟 漏网之鱼":
                         expected.append("[]DIRECT")
@@ -196,7 +245,7 @@ class ProxyIniTests(unittest.TestCase):
                 self.assertTrue(choices, "Empty groups may be converted to DIRECT")
                 if name == "Ⓜ️ 微软服务":
                     expected = "DIRECT"
-                elif name in ("📹 油管视频", "🐟 漏网之鱼"):
+                elif name in ("📲 电报消息", "📹 油管视频", "🐟 漏网之鱼"):
                     expected = AUTO_GROUP
                 else:
                     expected = NODES[0]
@@ -232,8 +281,11 @@ class ProxyIniTests(unittest.TestCase):
             "ProxyMedia.list": "🌍 国外媒体",
             "OneDrive.list": "Ⓜ️ 微软服务",
             "Microsoft.list": "Ⓜ️ 微软服务",
-            "Telegram.list": "🐟 漏网之鱼",
-            "Developer.list": "🐟 漏网之鱼",
+            "Telegram.list": "📲 电报消息",
+            "Crypto.list": "🪙 加密与支付",
+            "Binance.list": "🪙 加密与支付",
+            "PayPal.list": "🪙 加密与支付",
+            "Developer.list": "💬 社区论坛",
             "GoogleCNProxyIP.list": "🐟 漏网之鱼",
             "ProxyGFWlist.list": "🐟 漏网之鱼",
             "Epic.list": "🐟 漏网之鱼",
@@ -245,21 +297,62 @@ class ProxyIniTests(unittest.TestCase):
             with self.subTest(source=source):
                 self.assertEqual(self.sources[source][1], target)
 
+    def test_telegram_crypto_and_forum_rules_do_not_fall_into_final_group(self):
+        gfw_index = self.sources["ProxyGFWlist.list"][0]
+        china_index = self.sources["ChinaDomain.list"][0]
+        self.assertEqual(self.sources["Telegram.list"][1], "📲 电报消息")
+        self.assertLess(self.sources["Telegram.list"][0], gfw_index)
+        for rule in TELEGRAM_EXTRA_RULES:
+            with self.subTest(rule=rule):
+                self.assertIn(rule, self.rules)
+                self.assertLess(self.rules.index(rule), self.sources["Telegram.list"][0])
+        for source in ("Crypto.list", "Binance.list", "PayPal.list"):
+            with self.subTest(source=source):
+                self.assertEqual(self.sources[source][1], "🪙 加密与支付")
+                self.assertLess(self.sources[source][0], china_index)
+                self.assertLess(self.sources[source][0], gfw_index)
+        for domain in CRYPTO_PAYMENT_EXTRA_DOMAINS:
+            with self.subTest(domain=domain):
+                rule = f"🪙 加密与支付,[]DOMAIN-SUFFIX,{domain}"
+                self.assertIn(rule, self.rules)
+                self.assertLess(self.rules.index(rule), china_index)
+                self.assertLess(self.rules.index(rule), gfw_index)
+        for domain in FORUM_DOMAINS:
+            with self.subTest(domain=domain):
+                rule = f"💬 社区论坛,[]DOMAIN-SUFFIX,{domain}"
+                self.assertIn(rule, self.rules)
+                self.assertNotIn(f"🐟 漏网之鱼,[]DOMAIN-SUFFIX,{domain}", self.rules)
+                self.assertLess(self.rules.index(rule), china_index)
+                self.assertLess(self.rules.index(rule), gfw_index)
+
     def test_domestic_and_default_direct_services_cannot_select_a_proxy(self):
         sources = (
             "LocalAreaNetwork.list", "UnBan.list", "BilibiliHMT.list", "Bilibili.list",
             "NetEaseMusic.list", "ChinaMedia.list", "ChinaDomain.list", "ChinaCompanyIp.list",
             "ChinaIp.list", "Download.list", "GoogleCN.list", "Apple.list", "SteamCN.list",
+            "GameDownload.list", "CN.list", "PublicDirectCDN.list",
+            "AccelerateDirectSites.list", "ByteDance.list", "Alibaba.list", "China.list",
         )
         for source in sources:
             with self.subTest(source=source):
                 self.assertEqual(self.sources[source][1], "DIRECT")
         self.assertIn("DIRECT,[]GEOIP,CN,no-resolve", self.rules)
         self.assertIn("DIRECT,[]IP-CIDR,5.5.5.5/32", self.rules)
+        first_broad = min(self.sources[source][0] for source in
+                          ("Developer.list", "ProxyMedia.list", "ProxyGFWlist.list"))
+        google_cn_proxy = self.sources["GoogleCNProxyIP.list"][0]
+        for domain in DOMESTIC_SUPPLEMENT_DOMAINS:
+            with self.subTest(domain=domain):
+                rule = f"DIRECT,[]DOMAIN-SUFFIX,{domain}"
+                self.assertIn(rule, self.rules)
+                self.assertGreater(self.rules.index(rule), google_cn_proxy)
+                self.assertLess(self.rules.index(rule), first_broad)
 
     def test_game_download_exceptions_precede_platform_proxy_rules(self):
         steam_index = self.sources["Steam.list"][0]
         self.assertLess(self.sources["SteamCN.list"][0], steam_index)
+        self.assertLess(self.sources["GameDownload.list"][0], steam_index)
+        self.assertLess(self.sources["GameDownload.list"][0], self.sources["Epic.list"][0])
         for rule in ("DIRECT,[]DOMAIN-SUFFIX,steamserver.net",
                      "DIRECT,[]DOMAIN,steampipe.akamaized.net"):
             self.assertIn(rule, self.rules)
@@ -290,7 +383,7 @@ class ProxyIniTests(unittest.TestCase):
                      "uklans/cache-domains/blob/master/sony.txt"):
             self.assertIn(text, notice)
 
-    def test_jd_domains_are_direct_before_proxy_and_ad_rules(self):
+    def test_jd_and_ad_unban_domains_are_direct_before_proxy_and_ad_rules(self):
         first_non_direct = next(index for index, rule in enumerate(self.rules)
                                 if not rule.startswith("DIRECT,"))
         for domain in JD_DOMAINS:
@@ -298,22 +391,30 @@ class ProxyIniTests(unittest.TestCase):
                 rule = f"DIRECT,[]DOMAIN-SUFFIX,{domain}"
                 self.assertIn(rule, self.rules)
                 self.assertLess(self.rules.index(rule), first_non_direct)
+        for rule in AD_UNBAN_RULES:
+            with self.subTest(rule=rule):
+                self.assertIn(rule, self.rules)
+                self.assertLess(self.rules.index(rule), first_non_direct)
 
     def test_domestic_domain_rules_precede_broad_overseas_rules(self):
         first_broad = min(self.sources[source][0] for source in
                           ("Developer.list", "ProxyMedia.list", "ProxyGFWlist.list"))
         for source in ("BilibiliHMT.list", "Bilibili.list", "NetEaseMusic.list",
-                       "ChinaMedia.list", "ChinaDomain.list", "GoogleCN.list"):
+                       "ChinaMedia.list", "ChinaDomain.list", "GoogleCN.list",
+                       "CN.list", "PublicDirectCDN.list", "AccelerateDirectSites.list",
+                       "ByteDance.list", "Alibaba.list", "China.list"):
             with self.subTest(source=source):
                 self.assertLess(self.sources[source][0], first_broad)
 
-    def test_ad_rules_use_one_classical_source_and_builtin_reject(self):
+    def test_ad_rules_use_classical_sources_and_builtin_reject(self):
         ad_rules = [rule for rule in self.rules if rule.startswith("REJECT,")]
         self.assertEqual(ad_rules, [
+            "REJECT,https://cdn.jsdelivr.net/gh/ACL4SSR/ACL4SSR@master/Clash/BanAD.list",
             "REJECT,https://cdn.jsdelivr.net/gh/ACL4SSR/ACL4SSR@master/Clash/BanProgramAD.list",
+            "REJECT,https://cdn.jsdelivr.net/gh/ACL4SSR/ACL4SSR@master/Clash/BanEasyListChina.list",
         ])
         self.assertNotIn("REIJI007/AdBlock_Rule_For_Clash", "\n".join(self.rules))
-        self.assertLess(self.rules.index(ad_rules[0]),
+        self.assertLess(self.rules.index(ad_rules[-1]),
                         next(index for index, rule in enumerate(self.rules)
                              if rule.startswith("🤖 AI服务,")))
 
