@@ -99,13 +99,13 @@ Mihomo 按最终生成的 `rules` 列表**自顶向下**逐条匹配，通常命
 **关键事实**：
 - **精确规则不会自动越级**：排在后面的精确 `DOMAIN` 不会优先于排在前面的 `DOMAIN-SUFFIX` 或 `DOMAIN-KEYWORD`。
 - **分节推荐顺序**：
-  1. **基础直连与高优先级白名单**（局域网 `LocalAreaNetwork`、`UnBan`、易被误杀的国内核心电商如京东域名）。
-  2. **广告与恶意软件拦截**（`REJECT`）。
-  3. **高敏感专属业务分流**（AI 服务、细分流媒体 YouTube / TikTok / Netflix / 巴哈姆特、微软服务）。
-  4. **国内应用、媒体与确定性下载直连例外**（Bilibili、网易云音乐、国内媒体、Apple、游戏平台国内/下载 CDN 直连例外）。
-  5. **特定海外服务与 Google 例外链**（游戏商店/社区、Google FCM 推送、Telegram、Cloudflare 通用挑战域、`GoogleCNProxyIP.list` 代理例外 → `GoogleCN.list` 直连白名单 → `ChinaDomain.list`）。
-  6. **通用海外代理兜底**（`Developer.list`、`ProxyMedia.list`、`ProxyGFWlist.list`）。
-  7. **国内 IP 与下载直连兜底**（`ChinaCompanyIp`、`ChinaIp`、`Download`、`GEOIP,CN,no-resolve`）。
+  1. **基础直连与必要白名单**（局域网 `LocalAreaNetwork`、`UnBan`、明确的隐私页面/静态资源；普通电商整域不能前置绕过广告拦截）。
+  2. **广告域拦截**（`REJECT`，同域正文与广告不能靠域名规则区分）。
+  3. **专属业务分流**（AI 自有域、YouTube / TikTok / Netflix / 巴哈姆特）。
+  4. **国内媒体、Apple 与确定性下载例外**，随后微软与游戏平台/推送规则。微软列表的 `akadns.net` 不能抢先捕获 Sony 下载主机。
+  5. **电报、支付、论坛与 Google 例外链**（代理例外 → GoogleCN / 国内域名集合与明确补充）。
+  6. **通用海外规则**（`Developer.list`、`ProxyMedia.list`、`ProxyGFWlist.list`）。
+  7. **下载与国内 IPv4/IPv6 兜底**（Download、ChinaCompanyIp、ChinaIp、ChinaIpV6、`GEOIP,CN`，在此才按需解析未命中域名）。
   8. **最终兜底**（Mihomo 原生 `MATCH` / Subconverter `[]FINAL`）。
 
 **实证遮蔽案例**：
@@ -142,7 +142,7 @@ Mihomo 按最终生成的 `rules` 列表**自顶向下**逐条匹配，通常命
 ```
 
 - **为什么常用**：若规则表后段的国内 IP / `GEOIP,CN` 规则未加 `no-resolve`，尚未命中前置域名规则的海外域名请求在匹配到该行时，会触发本地 DNS 解析以获取 IP，既增加首包延迟，也可能产生非预期的本地解析请求。
-- **边界说明**：添加 `no-resolve` 后，纯域名连接若未在前面命中域名规则且尚未解析出 IP，将直接跳过该 IP 规则进入后续 `MATCH` 兜底；因此国内常用域名必须依靠前置的 `ChinaDomain.list` 等域名规则保障直连，不能仅靠一条 `GEOIP,CN,no-resolve` 兜底所有国内流量。
+- **边界说明**：添加 `no-resolve` 后，尚未解析出 IP 的连接跳过该条 IP 规则；前面若已有真实 IP 则仍能匹配。不能仅看末尾 `no-resolve` 就断言请求进入 MATCH。旧版首条 `5.5.5.5/32` 无该参数，会提前解析域名；当前首条改为 no-resolve，并在通用海外规则之后用 `GEOIP,CN` 按需解析长尾请求。正常 fake-ip 映射会恢复 Host 并清空伪 DstIP，不等于无法执行国内 IP 判断。该取舍依赖客户端 DNS 配置，不能据此承诺 DNS 无污染或无泄露。
 
 ### 3.4 `MATCH`、`FINAL` 与 `[]`
 
@@ -175,12 +175,12 @@ rule-providers:
 | 规则源仓库 | 特点与适用场景 | 实测风险与避坑要点 |
 |---|---|---|
 | `ACL4SSR/ACL4SSR` | 经典 Clash 分流片段，适合局域网、国内域名/IP、主流流媒体、基础去广告（`BanProgramAD.list`） | `ProxyMedia.list` 含 `challenges.cloudflare.com`；`AI.list` 与媒体规则高度重叠 |
-| `blackmatrix7/ios_rule_script` | 分类极细，更新频繁，适合单一服务（如 `OpenAI.list`、`Claude.list`） | `Copilot.list` 混入 `challenges.cloudflare.com`、`www.bing.com`、`auth0.com`、`stripe.com` 及大量遥测域；`Gemini.list` 混入 `apis.google.com` 与 `DOMAIN-KEYWORD,generativelanguage` |
+| `blackmatrix7/ios_rule_script` | 提供细分平台集合，当前按需使用字节、阿里与 PayPal 源 | `OpenAI.list` 实含 auth0/Stripe/共享遥测和 ASN 20473；`China.list` 含 ms/in.th 整后缀；不能将列表名称当作纯净性证据 |
 | `MetaCubeX/meta-rules-dat` | Mihomo 官方维护的 GeoSite/GeoIP/MRS 数据，适合原生 `GEOSITE` 或 `mrs` provider | 需目标内核与客户端数据文件同步更新 |
 | `uklans/cache-domains` | 社区维护的 LAN 缓存确定性下载 CDN 清单（Steam/Epic/Sony 等，MIT 许可） | 仅代表下载/缓存 CDN 域名用途，不包含商店/登录主域；复用须保留 MIT 版权声明 |
 
 **防污染工程准则**：
-1. **拒绝盲目整份引入宽泛 AI 列表**：采用“纯净专用源（OpenAI/Claude）+ 核心域名精确内联（`[]DOMAIN` / `[]DOMAIN-SUFFIX`）”方案，杜绝把 `auth0.com`（通用认证）、`stripe.com`（通用支付）、`www.bing.com`（搜索）、`apis.google.com`（Google 基础 API）绑入 AI 策略组。
+1. **拒绝盲目整份引入宽泛 AI 列表**：当前自维护产品自有域与专用主机，使用带起止边界的内联 DOMAIN-REGEX 合并。共享 `auth0.com`、`stripe.com`、`www.bing.com`、`apis.google.com` 不归 AI；Copilot 使用 githubcopilot.com 全子域，并覆盖官方个人/商业/企业接口。
 2. **解耦通用验证域名**：在 `ProxyMedia.list` 之前将 `challenges.cloudflare.com` 显式指向默认海外出口（`🐟 漏网之鱼`），防止非媒体站点触发 Cloudflare 验证时跨出口失败。
 3. **控制广告源规模与格式**：超大型广告列表（如 REIJI `adblock_reject.txt` 约 595k 条 `payload:` YAML）不仅未获 Subconverter 默认 `surge` 格式解析保证，且常拦截 `statsig`、`featuregates`、`segment` 等功能开关域名导致正常业务异常；优先使用轻量可验证的 `BanProgramAD.list`。
 
@@ -313,7 +313,8 @@ Mihomo 支持对 HTTP、TLS（SNI）、QUIC 流量进行域名嗅探。当客户
 - **`exclude_remarks=` 空值陷阱**：
   在本地运行 Subconverter 或构造转换参数时，若保留空的 `exclude_remarks=`，转换器会将其按空正则处理从而匹配并**排除所有节点**；需要禁用排除过滤时，应删除该配置项或填入不会命中正常名称的表达式。
 - **远程规则格式兼容性**：
-  HTTP 返回 200 不代表内容可被正确导入。例如带 `payload:` 顶层键的 Clash YAML 规则集在未声明类型时，Subconverter 默认按 `surge` 行格式解析可能失效或产生异常规则。
+  HTTP 返回 200 不代表内容可被正确导入。例如带 `payload:` 顶层键的 Clash YAML 规则集在未声明类型时，Subconverter 默认按 `surge` 行格式解析可能失效或产生异常规则。v0.9.0 远程输入的 IP-ASN、URL-REGEX、DOMAIN-REGEX 会被目标类型过滤；内联 `[]DOMAIN-REGEX` 则透传，由 Mihomo 解析。
+- **数量限制**：v0.9.0 默认 TOML 的 `max_allowed_rulesets=64` 统计每条 ruleset 指令（含内联）。当前通过同策略边界正则合并至 61 条；正则不得包含逗号或 INI 的 `\\n` / `\\r` / `\\t` 字面转义。展开总规则还受独立 `max_allowed_rules` 限制，必须确认最终 MATCH 保留并比较完整输出，不能只核对 URL 数量。
 
 来源：
 
@@ -336,11 +337,11 @@ Mihomo 支持对 HTTP、TLS（SNI）、QUIC 流量进行域名嗅探。当客户
 
 ### 8.2 Cloudflare 验证（Managed Challenge / Turnstile）机制与排查
 
-根据 Cloudflare 官方文档，Managed Challenge 的验证通过率与以下因素直接相关：
+验证码故障应结合实际会话、网络与站点响应判断，不能根据策略组名称断言验证必然成功：
 
-1. **原始请求与解题请求的出口 IP 一致性**：
-   Cloudflare 明确指出，若触发挑战的页面请求与加载/提交挑战（如 `challenges.cloudflare.com`）的请求来自不同 IP，验证解题可能失效并陷入循环验证。
-   - **配置侧修复**：切勿让 `ProxyMedia.list` 将 `challenges.cloudflare.com` 绑死到媒体组，也不要将其强绑到单一业务组；应在媒体规则前单列归入默认海外出口（或排查时将相关业务组与默认出口设为同一节点）。
+1. **核对原始请求与挑战资源的实际出口**：
+   当前配置不保证业务组与 `challenges.cloudflare.com` 使用同一节点。排查时可让两者临时使用同一稳定出口做单变量对照，但不能把所有 Turnstile 或跨域挑战请求概括为“不同出口必然失效”。
+   - **配置侧处理**：在 `ProxyMedia.list` 前单列通用挑战资源，避免被绑定到媒体组；实际故障须通过客户端连接与浏览器响应核实。
 2. **代理入口（“套 CDN”）与真实出口 IP 的区别**：
    节点名称中的“CDN / 家宽 / 原生解锁”通常只描述客户端到代理入口的中转方式或命名标签，不决定目标网站看到的落地出口 IP；即使客户端固定手选同一节点，部分供应商后端仍可能动态轮换出口 IP。
 3. **标准单变量排查流程**：
@@ -390,7 +391,7 @@ Mihomo 支持对 HTTP、TLS（SNI）、QUIC 流量进行域名嗅探。当客户
 |---|---|---|---|
 | **1. 离线静态与集合回归** | 运行 `py -3 -B scripts/test/test_proxy_ini.py` | 策略组定义、无空组、默认首项、无循环引用、规则去重、关键父子域与防污染顺序契约 | 远程 URL 当前可达性、Subconverter 实际导出、目标内核兼容性 |
 | **2. 本地转换校验** | 回环地址运行 Subconverter 转换合成节点 | `.ini` 语法、正则在 C++ `std::regex` 下的实际分组结果、远程规则拉取与展开后首命中 | 真实订阅节点连通性与业务解锁 |
-| **3. 内核配置投影校验** | 设置 `MIHOMO_BIN` 运行 `mihomo -t -d <dir> -f <file>` | 目标 Mihomo 版本对生成的策略组类型、测速参数与 UTF-8 名称的解析合法性 | 完整远程规则集行为、DNS/TUN 系统接管效果 |
+| **3. 内核语法校验** | `MIHOMO_BIN` 验证分组及全部内联规则；`verify_proxy_ini.py --mihomo-bin` 可验证完整规则，搭配 `--subconverter-bin` 验证真正转换的 YAML | 目标版本对分组、正则、IP/进程等完整规则语法的接受情况 | DNS/TUN 接管、真实出口、域名归属与业务可用性 |
 | **4. 真实客户端与业务 A/B** | 客户端连接面板 + 目标站点同条件单变量对照 | 规则实际命中、DNS/TUN 接管、出口 IP 稳定性、AI/流媒体/Cloudflare 真实可用性 | 未来供应商后端路由变更后的持续可用性 |
 
 **内核校验工程要点**：
@@ -399,32 +400,22 @@ Mihomo 支持对 HTTP、TLS（SNI）、QUIC 流量进行域名嗅探。当客户
 
 ---
 
-## 11. 本项目 `proxy.ini` 当前架构与审计摘要（2026-10-25）
+## 11. 本项目 `proxy.ini` 当前架构与维护入口（2026-10-26）
 
-### 11.1 策略组架构（7 个业务组 + 1 个自动组）
+### 11.1 策略组
 
-- **全选策略**：全部 8 个组均使用 `.*` 匹配所有导入节点，彻底消除因供应商改名、新增家族或添加国旗 emoji 导致的空组风险。
-- **分组清单与默认首项**：
-  1. `🤖 AI服务`（`select`）：`.*` → `[]♻️ 自动选择`（默认手选首节点）
-  2. `📹 油管视频`（`select`）：`[]♻️ 自动选择` → `.*`（默认自动优选）
-  3. `🎵 TikTok`（`select`）：`.*` → `[]♻️ 自动选择`（默认手选首节点）
-  4. `🌍 国外媒体`（`select`）：`.*` → `[]♻️ 自动选择`（默认手选首节点）
-  5. `🎥 奈飞视频`（`select`）：`.*` → `[]♻️ 自动选择`（默认手选首节点）
-  6. `Ⓜ️ 微软服务`（`select`）：`[]DIRECT` → `[]♻️ 自动选择` → `.*`（默认直连）
-  7. `🐟 漏网之鱼`（`select`）：`[]♻️ 自动选择` → `.*` → `[]DIRECT`（默认自动优选，保留直连备选）
-  8. `♻️ 自动选择`（`url-test`）：`.*`，测速地址 `https://www.gstatic.com/generate_204`，参数 `600,,150`
+保留 10 个业务手动组与 1 个自动组，全部按 `.*` 选择具名节点。AI、社区论坛、加密与支付、TikTok、国外媒体、奈飞默认首节点；电报、油管、漏网默认自动；微软默认 DIRECT。自动组仍为 gstatic / `600,,150`。手选与测速均不保证地区、IP 信誉或业务解锁。
 
-### 11.2 规则分段结构（9 段共 65 条 `ruleset=`）
+### 11.2 规则与验证
 
-1. **基础直连与京东白名单**：`5.5.5.5/32`、`LocalAreaNetwork.list`、`UnBan.list` 及京东 6 个核心域名后缀直连。
-2. **广告拦截**：单一 `ACL4SSR/BanProgramAD.list` 直接指向内置 `REJECT`。
-3. **AI 专属分流**：`blackmatrix7` 的 `OpenAI.list`、`Claude.list` + Google AI Studio / Gemini / Copilot / Perplexity / xAI / Grok 共 11 条精确/后缀内联规则，指向 `🤖 AI服务`。
-4. **视频与微软专用规则**：`YouTube.list`、`TikTok.list`、`Netflix.list`、`Bahamut.list`、`OneDrive.list`、`Microsoft.list` 分别指向对应业务组。
-5. **国内应用与苹果服务**：`BilibiliHMT.list`、`Bilibili.list`、`NetEaseMusic.list`、`ChinaMedia.list`、`Apple.list` 固定指向 `DIRECT`。
-6. **游戏下载直连与平台/推送代理**：`SteamCN.list`、Steam 下载域及 `uklans/cache-domains`（MIT 许可见 `规则数据许可.txt`）的 Epic/Sony 确定性下载域置前 `DIRECT`；`Epic.list`、`Sony.list`、`Steam.list`、`GoogleFCM.list` 指向 `🐟 漏网之鱼`。
-7. **海外例外、国内白名单与通用代理**：`Telegram.list`、`challenges.cloudflare.com`、`nodeseek.com`、Google 代理例外（`xn--ngstr-lra8j.com`、`services.googleapis.cn`、`GoogleCNProxyIP.list`）在先 → `GoogleCN.list`、`ChinaDomain.list` 直连居中 → `Developer.list`、`ProxyMedia.list`、`ProxyGFWlist.list` 通用海外规则在后。
-8. **国内 IP 与下载直连兜底**：`ChinaCompanyIp.list`、`ChinaIp.list`、`Download.list`、`[]GEOIP,CN,no-resolve` 指向 `DIRECT`。
-9. **最终兜底**：`ruleset=🐟 漏网之鱼,[]FINAL`。
+- 61 条 ruleset 指令（含 41 个远程列表），兼容默认 64 条限制；部分同策略例外合并为 Mihomo DOMAIN-REGEX。只支持 Subconverter + Mihomo，不承诺旧 Clash 内核兼容。
+- AI 自有域与专用主机自维护，移除共享 Auth0/Stripe、遥测与云 ASN 污染；Copilot 覆盖个人/商业/企业子域。
+- 电商普通整域在广告之后直连；前置精确业务白名单与 OpenXLab 等关键词误伤例外。广告域指向 REJECT，不能承诺清除同域广告。
+- 社区、Bybit 地区 API/WS、Wise 旧域有明确例外；国内域名集合保留可用远程链接，移除含 ms/in.th 整后缀的 China.list，辅以国内应用/游戏/银行明确域名。
+- 末段国内 GEOIP 解析兜底与 ChinaIpV6，避免前置特殊 IP 规则触发全局 DNS 解析；效果受客户端 DNS 与接管影响。
+- 离线入口：`py -3 -B scripts/test/test_proxy_ini.py`。`MIHOMO_BIN` 可附加验证全部内联规则语法。
+- 远程/转换入口：`py -3 -B scripts/test/verify_proxy_ini.py`，可传 `--snapshot <临时JSON>`、`--subconverter-bin <exe>`、`--mihomo-bin <exe>`。公开列表必须全量成功，验证首命中与共享域负例，报告不支持类型；本地转换仅用回环合成节点，比较完整输出并检查最终 MATCH，再用内核校验真实 YAML。
+- 真实订阅、客户端 DNS/TUN、节点出口及业务可用性均为独立验证层；无需把大体积列表快照或临时程序提交仓库。
 
 ---
 

@@ -1,11 +1,11 @@
-"""Offline checks for this project's Subconverter groups, rules and node names.
+"""Offline contracts and domain regression cases for Subconverter + Mihomo.
 
-NODES retains the last observed 16-node name shapes with synthetic UUIDs.
-It checks name selection, not the current subscription or service availability.
-Set MIHOMO_BIN to additionally validate a credential-free group projection;
-that projection does not replace conversion with the user's Subconverter.
+NODES are synthetic name fixtures, not a current subscription. Offline tests do
+not fetch remote lists. verify_proxy_ini.py checks their actual expanded rules.
 """
 
+from dataclasses import dataclass
+import ipaddress
 import json
 import os
 from pathlib import Path
@@ -17,22 +17,13 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
 NODES = (
-    "isus-原生解锁",
-    "isus-原生解锁-cdn",
-    "hyhk-vm-ws",
-    "hyhk-vm-ws-cdn",
-    "xzhk-vm-ws",
-    "xzhk-vm-ws-cdn",
-    "🇳🇱 NL-vm-ws-nl",
-    "🇳🇱 NL-vm-ws-cdn",
-    "🇯🇵 cheaphost-日本-流媒体-解锁",
-    "🇸🇬 三网优化SG伪家宽-解锁-vless",
+    "isus-原生解锁", "isus-原生解锁-cdn", "hyhk-vm-ws", "hyhk-vm-ws-cdn",
+    "xzhk-vm-ws", "xzhk-vm-ws-cdn", "🇳🇱 NL-vm-ws-nl", "🇳🇱 NL-vm-ws-cdn",
+    "🇯🇵 cheaphost-日本-流媒体-解锁", "🇸🇬 三网优化SG伪家宽-解锁-vless",
     "🇯🇵 绿云 IIJ-日本-流媒体-解锁-vl-reality-vision-deadbeef-dead-beef-dead-beefdeadbeef",
     "🇯🇵 绿云 IIJ-日本-流媒体-解锁-vm-ws-deadbeef-dead-beef-dead-beefdeadbeef",
-    "🇺🇸 racknerd-us-解锁-vless",
-    "🇺🇸 racknerd-us-解锁-cdn",
-    "🇯🇵 cheaphost-日本-流媒体-解锁-cdn",
-    "🇸🇬 三网优化SG伪家宽-解锁-cdn",
+    "🇺🇸 racknerd-us-解锁-vless", "🇺🇸 racknerd-us-解锁-cdn",
+    "🇯🇵 cheaphost-日本-流媒体-解锁-cdn", "🇸🇬 三网优化SG伪家宽-解锁-cdn",
 )
 BUSINESS_GROUPS = (
     "🤖 AI服务", "💬 社区论坛", "🪙 加密与支付", "📲 电报消息", "📹 油管视频",
@@ -40,59 +31,17 @@ BUSINESS_GROUPS = (
 )
 AUTO_GROUP = "♻️ 自动选择"
 ALL_GROUPS = BUSINESS_GROUPS + (AUTO_GROUP,)
-ALL_NODES_SELECTOR = ".*"
+BUILTINS = {"DIRECT", "REJECT"}
 TEST_URL = "https://www.gstatic.com/generate_204"
+MIHOMO_BIN = os.environ.get("MIHOMO_BIN")
+# Subconverter v0.9.0 ruleconvert.cpp: ClashRuleTypes (remote Surge input).
+CLASH_REMOTE_TYPES = {
+    "DOMAIN", "DOMAIN-SUFFIX", "DOMAIN-KEYWORD", "IP-CIDR", "SRC-IP-CIDR",
+    "GEOIP", "MATCH", "FINAL", "IP-CIDR6", "SRC-PORT", "DST-PORT", "PROCESS-NAME",
+}
+DOMAIN_TYPES = {"DOMAIN", "DOMAIN-SUFFIX", "DOMAIN-KEYWORD", "DOMAIN-REGEX"}
 JD_DOMAINS = (
     "jd.com", "360buy.com", "360buyimg.com", "jdcloud.com", "jdpay.com", "jcloudcs.com",
-)
-AD_UNBAN_RULES = (
-    "DIRECT,[]DOMAIN,wxsnsdy.wxs.qq.com",
-    "DIRECT,[]DOMAIN,wxsnsdythumb.wxs.qq.com",
-    "DIRECT,[]DOMAIN-SUFFIX,act.qq.com",
-    "DIRECT,[]DOMAIN-SUFFIX,img1.126.net",
-    "DIRECT,[]DOMAIN-SUFFIX,img2.126.net",
-    "DIRECT,[]DOMAIN-SUFFIX,mimg.126.net",
-    "DIRECT,[]DOMAIN-SUFFIX,g.click.taobao.com",
-    "DIRECT,[]DOMAIN-SUFFIX,ai.m.taobao.com",
-    "DIRECT,[]DOMAIN-SUFFIX,re.m.taobao.com",
-)
-TELEGRAM_EXTRA_RULES = (
-    "📲 电报消息,[]DOMAIN-SUFFIX,cdn-telegram.org",
-    "📲 电报消息,[]DOMAIN-SUFFIX,telegram-cdn.org",
-    "📲 电报消息,[]DOMAIN-SUFFIX,fragment.com",
-    "📲 电报消息,[]DOMAIN-SUFFIX,tx.me",
-    "📲 电报消息,[]DOMAIN-SUFFIX,tg.dev",
-    "📲 电报消息,[]DOMAIN-SUFFIX,graph.org",
-    "📲 电报消息,[]DOMAIN-SUFFIX,legra.ph",
-    "📲 电报消息,[]DOMAIN-SUFFIX,comments.app",
-    "📲 电报消息,[]DOMAIN-SUFFIX,quiz.directory",
-    "📲 电报消息,[]IP-CIDR,91.105.192.0/23,no-resolve",
-    "📲 电报消息,[]IP-CIDR,185.76.151.0/24,no-resolve",
-    "📲 电报消息,[]IP-CIDR,5.28.192.0/18,no-resolve",
-    "📲 电报消息,[]IP-CIDR6,2001:b28:f23c::/48,no-resolve",
-    "📲 电报消息,[]IP-CIDR6,2a0a:f280::/32,no-resolve",
-)
-CRYPTO_PAYMENT_EXTRA_DOMAINS = (
-    "bycsi.com", "bytick.com", "byabcde.com", "bybbi.com", "byd3c3.com",
-    "bitget.com", "bitgetapp.com", "htx.com", "hyperliquid.xyz",
-    "wise.com", "revolut.com", "airwallex.com",
-    "dupay.one", "onekey.so", "pokepay.cc", "redotpay.com",
-)
-FORUM_DOMAINS = (
-    "nodeseek.com", "nodeimage.com", "deepflood.com", "nodequality.com",
-    "linux.do", "idcflare.com", "v2ex.com", "v2ex.co", "hostloc.com",
-    "2libra.com", "lowendtalk.com", "lowendspirit.com", "lowendbox.com",
-    "1lou.me", "xdaforums.com", "reddit.com", "redd.it", "redditmedia.com",
-    "redditstatic.com", "discord.com", "discordapp.com", "discordapp.net",
-    "discord.gg", "discord.media", "discordcdn.com", "x.com", "twitter.com",
-    "t.co", "twimg.com",
-)
-DOMESTIC_SUPPLEMENT_DOMAINS = (
-    "xn--zfr164b",
-    "deepseek.com", "kimi.com", "qianwen.com", "tongyi.com", "stepfun.com",
-    "minimaxi.com", "minimax.io", "hailuoai.com",
-    "kurogames.com", "hypergryph.com", "hg-cdn.com",
-    "xhslink.com", "inkuai.com",
 )
 EPIC_DOWNLOAD_DOMAINS = (
     "cdn.unrealengine.com", "cdn1.epicgames.com", "cdn1.unrealengine.com",
@@ -112,9 +61,132 @@ SONY_DOWNLOAD_DOMAINS = (
     "sgst.prod.dl.playstation.net", "theia.dl.playstation.net", "tmdb.np.dl.playstation.net",
     "uef.np.dl.playstation.net", "vulcan.dl.playstation.net",
 )
-BUILTINS = {"DIRECT", "REJECT"}
-GROUP_SECTION_COMMENT = "; ---------- 全节点选择与自动入口 ----------"
-MIHOMO_BIN = os.environ.get("MIHOMO_BIN")
+AI_DOMAINS = (
+    "chatgpt.com", "chat.openai.com", "api.openai.com", "cdn.oaistatic.com",
+    "files.oaiusercontent.com", "sora.com", "claude.ai", "api.anthropic.com",
+    "claude.com", "aistudio.google.com", "makersuite.google.com", "gemini.google.com",
+    "generativelanguage.googleapis.com", "api.githubcopilot.com",
+    "api.individual.githubcopilot.com", "api.business.githubcopilot.com",
+    "api.enterprise.githubcopilot.com", "copilot-proxy.githubusercontent.com",
+    "copilot.microsoft.com", "copilot.cloud.microsoft", "sydney.bing.com",
+    "www.perplexity.ai", "api.x.ai", "grok.com", "openai-api.arkoselabs.com",
+)
+SHARED_DOMAINS = (
+    "tenant.auth0.com", "checkout.stripe.com", "api.stripe.com", "sentry.io",
+    "algolia.net", "static.cloudflareinsights.com", "intercom.io", "segment.io",
+    "launchdarkly.com", "featuregates.org", "api.statsig.com", "identrust.com",
+    "challenges.cloudflare.com", "apis.google.com", "www.bing.com",
+)
+TELEGRAM_DOMAINS = (
+    "t.me", "web.telegram.org", "telegram.me", "tdesktop.com", "telegra.ph",
+    "telesco.pe", "cdn-telegram.org", "telegram-cdn.org", "fragment.com",
+    "tx.me", "tg.dev", "graph.org", "legra.ph", "comments.app", "quiz.directory",
+)
+TELEGRAM_OFFICIAL_CIDRS = (
+    "91.108.56.0/22", "91.108.4.0/22", "91.108.8.0/22", "91.108.16.0/22",
+    "91.108.12.0/22", "149.154.160.0/20", "91.105.192.0/23", "91.108.20.0/22",
+    "185.76.151.0/24", "2001:b28:f23d::/48", "2001:b28:f23f::/48",
+    "2001:67c:4e8::/48", "2001:b28:f23c::/48", "2a0a:f280::/32",
+)
+PAYMENT_DOMAINS = (
+    "www.okx.com", "oklink.com", "okx-dns.com", "www.bybit.com", "bytick.com",
+    "bycsi.com", "api.bybit.kz", "stream.bybit.kz", "api.bybit.eu", "stream.bybit.eu",
+    "api.bybit.nl", "api.bybit.tr", "stream.bybit.tr", "api.bybit.ae",
+    "api.bybit.id", "api.bybitgeorgia.ge", "api.manepa.jp", "stream.manepa.jp",
+    "api.spark-fintech.com", "stream.spark-fintech.com", "api.bybit-tr.com",
+    "www.binance.com", "bnbstatic.com", "bitget.com", "htx.com", "gate.io",
+    "coinbase.com", "kraken.com", "www.paypal.com", "www.paypalobjects.com",
+    "www.wise.com", "api.transferwise.com", "api.sandbox.transferwise.tech",
+    "revolut.com", "airwallex.com", "redotpay.com", "dupay.one", "onekey.so",
+    "pokepay.cc", "hyperliquid.xyz", "uniswap.org", "debank.com", "etherscan.io",
+)
+FORUM_DOMAINS = (
+    "nodeseek.com", "i.nodeimage.com", "deepflood.com", "nodequality.com",
+    "linux.do", "connect.linux.do", "linuxdo-uploads.s3.linux.do", "idcflare.com",
+    "www.v2ex.com", "i.v2ex.co", "hostloc.com", "2libra.com", "lowendtalk.com",
+    "lowendspirit.com", "lowendbox.com", "1lou.me", "xdaforums.com", "reddit.com",
+    "i.redd.it", "redditmedia.com", "redditstatic.com", "discord.com",
+    "cdn.discordapp.com", "discordapp.net", "discord.gg", "discord.media",
+    "discordcdn.com", "x.com", "twitter.com", "t.co", "pbs.twimg.com",
+)
+DOMESTIC_DOMAINS = (
+    "douyin.com", "douyincdn.com", "douyinpic.com", "douyinvod.com", "iesdouyin.com",
+    "snssdk.com", "amemv.com", "pstatp.com", "bytedance.com", "byteimg.com",
+    "bytetos.com", "bytegoofy.com", "bdurl.net", "zijieapi.com", "toutiao.com",
+    "toutiaoimg.com", "ixigua.com", "feishu.cn", "feishucdn.com", "larksuitecdn.com",
+    "doubao.com", "volces.com", "volcengine.com", "volccdn.com", "kuaishou.com",
+    "yximgs.com", "gifshow.com", "inkuai.com", "xiaohongshu.com", "xhscdn.com",
+    "xhslink.com", "pinduoduo.com", "yangkeduo.com", "pddpic.com", "taobao.com",
+    "tmall.com", "alicdn.com", "alipay.com", "alipayobjects.com", "1688.com",
+    "goofish.com", "aliyundrive.com", "alipan.com", "quark.cn", "dingtalk.com",
+    "ddurl.to", "amap.com", "autonavi.com", "ele.me", "elemecdn.com", "cainiao.com",
+    "aliyun.com", "aliyuncs.com", "qq.com", "wechat.com", "qpic.cn", "gtimg.com",
+    "myqcloud.com", "tenpay.com", "tencent.com", "tencent-cloud.net",
+    "servicewechat.com", "weiyun.com", "wemeet.tencent.com", "meituan.com",
+    "meituan.net", "dpfile.com", "dianping.com", "sankuai.com", *JD_DOMAINS,
+    "policy.jd.com", "baidu.com", "bdstatic.com", "baidupcs.com", "bcebos.com",
+    "deepseek.com", "moonshot.cn", "kimi.com", "zhipuai.cn", "bigmodel.cn",
+    "chatglm.cn", "qianwen.com", "tongyi.com", "hunyuan.tencent.com",
+    "yuanbao.tencent.com", "siliconflow.cn", "stepfun.com", "minimax.io",
+    "hailuoai.com", "minimaxi.com", "52pojie.cn", "right.com.cn", "chiphell.com",
+    "nga.cn", "ngabbs.com", "178.com", "smzdm.com", "zdmimg.com", "coolapk.com",
+    "coolapkmarket.com", "hupu.com", "zhihu.com", "zhimg.com", "douban.com",
+    "doubanio.com", "weibo.com", "weibocdn.com", "sinaimg.cn", "tieba.baidu.com",
+    "csdn.net", "juejin.cn", "oschina.net", "gitee.com", "cnblogs.com",
+    "segmentfault.com", "didichuxing.com", "udache.com", "12306.cn",
+    "sf-express.com", "wps.cn", "wps.com", "kdocs.cn", "115.com", "115cdn.com",
+    "123pan.com", "123pan.cn", "mihoyo.com", "miyoushe.com", "bhsr.com",
+    "yuanshen.com", "kurogames.com", "hypergryph.com", "hg-cdn.com", "taptap.cn",
+    "taptap.com", "tapimg.com", "unionpay.com", "95516.com", "icbc.com.cn",
+    "ccb.com", "cmbchina.com", "abchina.com", "boc.cn", "bankcomm.com",
+    "10086.cn", "189.cn", "10010.com", "ke.com", "dewu.com", "zto.com",
+    "dongqiudi.com", "wanmei.com", "lilith.com", "futunn.com", "www.srcb.com",
+    "www.papegames.com", "www.ztgame.com", "www.yostar.com", "www.haodf.com",
+    "www.renrenche.com", "www.lingxigames.com", "openxlab.org.cn", "cdn.openxlab.org.cn",
+    "openxmlformats.org", "wxsnsdy.wxs.qq.com", "mimg.126.net", "img1.126.net",
+)
+AD_DOMAINS = (
+    "ads.union.jd.com", "jzt.jd.com", "stat.m.jd.com", "jrclick.jd.com",
+    "cps.360buy.com", "g.click.taobao.com", "ai.m.taobao.com", "re.m.taobao.com",
+    "act.qq.com", "openx.net", "analytics.126.net", "ad.xiaomi.com",
+)
+OVERSEAS_EXCEPTIONS = (
+    "services.googleapis.cn", "xn--ngstr-lra8j.com", "google.ms", "nyti.ms",
+    "ddns.ms", "bx.in.th", "challenges.cloudflare.com",
+)
+
+
+@dataclass(frozen=True)
+class Rule:
+    target: str
+    body: str
+    source: str
+    line: int
+
+    @property
+    def kind(self):
+        return self.body.partition(",")[0]
+
+    def matches_domain(self, domain):
+        kind, _, value = self.body.partition(",")
+        value = value.split(",", 1)[0]
+        host = domain.rstrip(".").lower()
+        value = value.lower()
+        if kind == "DOMAIN":
+            return host == value
+        if kind == "DOMAIN-SUFFIX":
+            return host == value or host.endswith("." + value)
+        if kind == "DOMAIN-KEYWORD":
+            return value in host
+        if kind == "DOMAIN-REGEX":
+            return re.search(value, host, flags=re.IGNORECASE) is not None
+        return False
+
+    def matches_ip(self, address):
+        if self.kind not in ("IP-CIDR", "IP-CIDR6"):
+            return False
+        network = ipaddress.ip_network(self.body.split(",")[1], strict=False)
+        return address.version == network.version and address in network
 
 
 def parse_groups(lines):
@@ -126,23 +198,16 @@ def parse_groups(lines):
         name, kind = fields[:2]
         if name in groups:
             raise ValueError(f"Duplicate group: {name}")
-        url_index = next(
-            (i for i, field in enumerate(fields)
-             if field.startswith(("http://", "https://"))),
-            len(fields),
-        )
-        groups[name] = {
-            "type": kind,
-            "selectors": [field for field in fields[2:url_index] if field],
-            "health": fields[url_index:],
-        }
+        url_index = next((i for i, field in enumerate(fields)
+                          if field.startswith(("http://", "https://"))), len(fields))
+        groups[name] = {"type": kind, "selectors": fields[2:url_index],
+                        "health": fields[url_index:]}
     return groups
 
 
 def candidates(group, nodes=NODES):
     result = []
     for selector in group["selectors"]:
-        # These selectors use a case-sensitive subset shared with Subconverter.
         matches = ([selector[2:]] if selector.startswith("[]") else
                    [name for name in nodes if re.search(selector, name)])
         for name in matches:
@@ -151,383 +216,251 @@ def candidates(group, nodes=NODES):
     return result
 
 
+def parse_rules(lines):
+    return [Rule(*line.partition("=")[2].split(",", 1), "proxy.ini", number)
+            for number, line in enumerate(lines, 1) if line.startswith("ruleset=")]
+
+
+def inline_rules(entries):
+    return [Rule(r.target, r.body[2:], r.source, r.line)
+            for r in entries if r.body.startswith("[]")]
+
+
+def expand_rules(entries, snapshots):
+    expanded, skipped = [], []
+    for entry in entries:
+        if entry.body.startswith("[]"):
+            expanded.append(Rule(entry.target, entry.body[2:], entry.source, entry.line))
+            continue
+        text = snapshots[entry.body]
+        for number, raw in enumerate(text.splitlines(), 1):
+            body = raw.strip()
+            if not body or body.startswith(("#", ";", "//")):
+                continue
+            rule = Rule(entry.target, body, entry.body, number)
+            if rule.kind not in CLASH_REMOTE_TYPES:
+                skipped.append(rule)
+                continue
+            expanded.append(rule)
+    return expanded, skipped
+
+
+def first_domain_match(rules, host):
+    # IP, ASN, DNS and process metadata are deliberately not simulated here.
+    return next((r for r in rules if r.matches_domain(host) or r.kind in ("FINAL", "MATCH")), None)
+
+
+def render_rule(rule):
+    kind, sep, payload = rule.body.partition(",")
+    if kind in ("FINAL", "MATCH"):
+        return f"MATCH,{rule.target}"
+    value, comma, params = payload.partition(",")
+    return f"{kind},{value},{rule.target}" + (f",{params}" if comma else "")
+
+
+def projection(groups, rules):
+    projected = []
+    for name, group in groups.items():
+        item = {"name": name, "type": group["type"], "proxies": candidates(group)}
+        if group["health"]:
+            interval, _, tolerance = group["health"][1].split(",")
+            item.update(url=group["health"][0], interval=int(interval), tolerance=int(tolerance))
+        projected.append(item)
+    return {
+        "mode": "rule", "log-level": "warning",
+        "proxies": [{"name": name, "type": "http", "server": "127.0.0.1", "port": 9}
+                    for name in NODES],
+        "proxy-groups": projected, "rules": [render_rule(r) for r in rules],
+    }
+
+
 class ProxyIniTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.lines = (ROOT / "proxy.ini").read_text(encoding="utf-8-sig").splitlines()
         cls.groups = parse_groups(cls.lines)
-        cls.rules = [line.partition("=")[2] for line in cls.lines
-                     if line.startswith("ruleset=")]
-        cls.sources = {rule.rsplit("/", 1)[-1]: (index, rule.split(",", 1)[0])
-                       for index, rule in enumerate(cls.rules) if ",https://" in rule}
+        cls.entries = parse_rules(cls.lines)
+        cls.inline = inline_rules(cls.entries)
+        cls.sources = {r.body.rsplit("/", 1)[-1]: r for r in cls.entries
+                       if r.body.startswith("https://")}
 
-    def test_only_ten_business_groups_and_one_auto_group_exist(self):
+    def test_business_groups_and_single_auto_group(self):
         self.assertEqual(tuple(self.groups), ALL_GROUPS)
-
-    def test_business_groups_are_manual_without_extra_manual_twins(self):
         for name in BUSINESS_GROUPS:
-            with self.subTest(group=name):
-                self.assertEqual(self.groups[name]["type"], "select")
-                self.assertEqual(self.groups[name]["health"], [])
-        self.assertFalse(any("手动" in name for name in self.groups))
-        self.assertEqual([name for name, group in self.groups.items()
-                          if group["type"] != "select"], [AUTO_GROUP])
+            self.assertEqual(self.groups[name]["type"], "select")
+        self.assertEqual(self.groups[AUTO_GROUP]["type"], "url-test")
 
-    def test_business_groups_offer_all_nodes_and_the_single_auto_group(self):
-        for name in BUSINESS_GROUPS:
-            with self.subTest(group=name):
-                expected = [ALL_NODES_SELECTOR, f"[]{AUTO_GROUP}"]
-                if name == "Ⓜ️ 微软服务":
-                    expected = ["[]DIRECT", f"[]{AUTO_GROUP}", ALL_NODES_SELECTOR]
-                elif name in ("📲 电报消息", "📹 油管视频", "🐟 漏网之鱼"):
-                    expected = [f"[]{AUTO_GROUP}", ALL_NODES_SELECTOR]
-                    if name == "🐟 漏网之鱼":
-                        expected.append("[]DIRECT")
-                self.assertEqual(self.groups[name]["selectors"], expected)
-                self.assertEqual([selector[2:] for selector in expected
-                                  if selector.startswith("[]") and selector[2:] in self.groups],
-                                 [AUTO_GROUP])
-
-    def test_automatic_selection_uses_all_nodes_and_stability_parameters(self):
-        group = self.groups[AUTO_GROUP]
-        self.assertEqual(group["type"], "url-test")
-        self.assertEqual(group["selectors"], [ALL_NODES_SELECTOR])
-        self.assertEqual(group["health"], [TEST_URL, "600,,150"])
-        self.assertEqual(candidates(group), list(NODES))
-
-    def test_every_business_group_covers_all_named_nodes(self):
-        for name in BUSINESS_GROUPS:
-            with self.subTest(group=name):
-                matched = candidates(self.groups[name])
-                self.assertEqual([node for node in matched if node in NODES], list(NODES))
-                self.assertEqual(len([node for node in matched if node in NODES]), len(NODES))
-
-    def test_all_node_selectors_accept_new_families_and_renamed_nodes(self):
-        names = ("ccus-returning", "🇩🇪 新供应商-德国-01", "Tokyo renamed node",
-                 "NL-vm-ws-nl", "custom-node", "🇭🇰 other-hk-cdn", "JP-01")
-        for group_name in ALL_GROUPS:
-            with self.subTest(group=group_name):
-                group = self.groups[group_name]
-                matched = candidates(group, names)
-                self.assertEqual([node for node in matched if node in names], list(names))
-                self.assertEqual([selector for selector in group["selectors"]
-                                  if not selector.startswith("[]")], [ALL_NODES_SELECTOR])
-                reversed_names = names[::-1]
-                self.assertEqual([node for node in candidates(group, reversed_names)
-                                  if node in names], list(reversed_names))
-
-    def test_all_node_selectors_do_not_implicitly_include_strategy_groups(self):
+    def test_all_named_nodes_and_default_choices(self):
         for name, group in self.groups.items():
             with self.subTest(group=name):
-                actual_group_refs = set(candidates(group)) & set(self.groups)
-                explicit_group_refs = {selector[2:] for selector in group["selectors"]
-                                       if selector.startswith("[]") and selector[2:] in self.groups}
-                self.assertEqual(actual_group_refs, explicit_group_refs)
-                self.assertNotIn(name, actual_group_refs)
+                self.assertEqual([s for s in group["selectors"] if not s.startswith("[]")], [".*"])
+                self.assertEqual([n for n in candidates(group) if n in NODES], list(NODES))
+                first = candidates(group)[0]
+                expected = "DIRECT" if name == "Ⓜ️ 微软服务" else (
+                    AUTO_GROUP if name in ("📲 电报消息", "📹 油管视频", "🐟 漏网之鱼") else NODES[0])
+                self.assertEqual(first, expected)
+        self.assertEqual(self.groups[AUTO_GROUP]["health"], [TEST_URL, "600,,150"])
+        self.assertEqual(candidates(self.groups["🐟 漏网之鱼"])[-1], "DIRECT")
+
+    def test_new_and_renamed_nodes_are_not_dropped(self):
+        names = ("🇩🇪 新供应商-德国-01", "Tokyo renamed node", "NL-vm-ws-nl", "custom-node")
+        for group in self.groups.values():
+            for roster in (names, names[::-1]):
+                self.assertEqual([n for n in candidates(group, roster) if n in names], list(roster))
 
     def test_group_references_are_defined_and_acyclic(self):
         def visit(name, stack):
             if name not in self.groups:
                 self.assertIn(name, set(NODES) | BUILTINS)
                 return
-            self.assertNotIn(name, stack, f"Group cycle: {stack + [name]}")
+            self.assertNotIn(name, stack)
             for child in candidates(self.groups[name]):
                 visit(child, stack + [name])
-
         for name in self.groups:
-            with self.subTest(group=name):
-                visit(name, [])
+            visit(name, [])
 
-    def test_default_choices_are_explicit_and_nonempty(self):
-        for name in BUSINESS_GROUPS:
-            with self.subTest(group=name):
-                choices = candidates(self.groups[name])
-                self.assertTrue(choices, "Empty groups may be converted to DIRECT")
-                if name == "Ⓜ️ 微软服务":
-                    expected = "DIRECT"
-                elif name in ("📲 电报消息", "📹 油管视频", "🐟 漏网之鱼"):
-                    expected = AUTO_GROUP
-                else:
-                    expected = NODES[0]
-                self.assertEqual(choices[0], expected)
-        self.assertEqual(candidates(self.groups["🐟 漏网之鱼"])[-1], "DIRECT")
-
-    def test_group_section_documents_the_all_nodes_contract(self):
-        self.assertIn(GROUP_SECTION_COMMENT, self.lines)
-        selectors = [selector for group in self.groups.values() for selector in group["selectors"]
-                     if not selector.startswith("[]")]
-        self.assertEqual(selectors, [ALL_NODES_SELECTOR] * len(ALL_GROUPS))
-
-    def test_rules_target_defined_groups_and_end_with_final(self):
-        for rule in self.rules:
-            self.assertIn(rule.split(",", 1)[0], set(self.groups) | BUILTINS)
-        final_rules = [rule for rule in self.rules if rule.endswith(",[]FINAL")]
-        self.assertEqual(final_rules, ["🐟 漏网之鱼,[]FINAL"])
-        self.assertEqual(self.rules[-1], final_rules[0])
-
-    def test_rules_have_no_duplicate_entries(self):
-        self.assertEqual(len(self.rules), len(set(self.rules)))
-
-    def test_remote_sources_are_not_reused_with_conflicting_targets(self):
-        sources = [rule.split(",", 1)[1] for rule in self.rules if ",https://" in rule]
-        self.assertEqual(len(sources), len(set(sources)))
-
-    def test_business_rule_sources_keep_their_targets(self):
-        expected = {
-            "YouTube.list": "📹 油管视频",
-            "TikTok.list": "🎵 TikTok",
-            "Netflix.list": "🎥 奈飞视频",
-            "Bahamut.list": "🌍 国外媒体",
-            "ProxyMedia.list": "🌍 国外媒体",
-            "OneDrive.list": "Ⓜ️ 微软服务",
-            "Microsoft.list": "Ⓜ️ 微软服务",
-            "Telegram.list": "📲 电报消息",
-            "Crypto.list": "🪙 加密与支付",
-            "Binance.list": "🪙 加密与支付",
-            "PayPal.list": "🪙 加密与支付",
-            "Developer.list": "💬 社区论坛",
-            "GoogleCNProxyIP.list": "🐟 漏网之鱼",
-            "ProxyGFWlist.list": "🐟 漏网之鱼",
-            "Epic.list": "🐟 漏网之鱼",
-            "Sony.list": "🐟 漏网之鱼",
-            "Steam.list": "🐟 漏网之鱼",
-            "GoogleFCM.list": "🐟 漏网之鱼",
-        }
-        for source, target in expected.items():
-            with self.subTest(source=source):
-                self.assertEqual(self.sources[source][1], target)
-
-    def test_telegram_crypto_and_forum_rules_do_not_fall_into_final_group(self):
-        gfw_index = self.sources["ProxyGFWlist.list"][0]
-        china_index = self.sources["ChinaDomain.list"][0]
-        self.assertEqual(self.sources["Telegram.list"][1], "📲 电报消息")
-        self.assertLess(self.sources["Telegram.list"][0], gfw_index)
-        for rule in TELEGRAM_EXTRA_RULES:
-            with self.subTest(rule=rule):
-                self.assertIn(rule, self.rules)
-                self.assertLess(self.rules.index(rule), self.sources["Telegram.list"][0])
-        for source in ("Crypto.list", "Binance.list", "PayPal.list"):
-            with self.subTest(source=source):
-                self.assertEqual(self.sources[source][1], "🪙 加密与支付")
-                self.assertLess(self.sources[source][0], china_index)
-                self.assertLess(self.sources[source][0], gfw_index)
-        for domain in CRYPTO_PAYMENT_EXTRA_DOMAINS:
-            with self.subTest(domain=domain):
-                rule = f"🪙 加密与支付,[]DOMAIN-SUFFIX,{domain}"
-                self.assertIn(rule, self.rules)
-                self.assertLess(self.rules.index(rule), china_index)
-                self.assertLess(self.rules.index(rule), gfw_index)
-        for domain in FORUM_DOMAINS:
-            with self.subTest(domain=domain):
-                rule = f"💬 社区论坛,[]DOMAIN-SUFFIX,{domain}"
-                self.assertIn(rule, self.rules)
-                self.assertNotIn(f"🐟 漏网之鱼,[]DOMAIN-SUFFIX,{domain}", self.rules)
-                self.assertLess(self.rules.index(rule), china_index)
-                self.assertLess(self.rules.index(rule), gfw_index)
-
-    def test_domestic_and_default_direct_services_cannot_select_a_proxy(self):
-        sources = (
-            "LocalAreaNetwork.list", "UnBan.list", "BilibiliHMT.list", "Bilibili.list",
-            "NetEaseMusic.list", "ChinaMedia.list", "ChinaDomain.list", "ChinaCompanyIp.list",
-            "ChinaIp.list", "Download.list", "GoogleCN.list", "Apple.list", "SteamCN.list",
-            "GameDownload.list", "CN.list", "PublicDirectCDN.list",
-            "AccelerateDirectSites.list", "ByteDance.list", "Alibaba.list", "China.list",
-        )
-        for source in sources:
-            with self.subTest(source=source):
-                self.assertEqual(self.sources[source][1], "DIRECT")
-        self.assertIn("DIRECT,[]GEOIP,CN,no-resolve", self.rules)
-        self.assertIn("DIRECT,[]IP-CIDR,5.5.5.5/32", self.rules)
-        first_broad = min(self.sources[source][0] for source in
-                          ("Developer.list", "ProxyMedia.list", "ProxyGFWlist.list"))
-        google_cn_proxy = self.sources["GoogleCNProxyIP.list"][0]
-        for domain in DOMESTIC_SUPPLEMENT_DOMAINS:
-            with self.subTest(domain=domain):
-                rule = f"DIRECT,[]DOMAIN-SUFFIX,{domain}"
-                self.assertIn(rule, self.rules)
-                self.assertGreater(self.rules.index(rule), google_cn_proxy)
-                self.assertLess(self.rules.index(rule), first_broad)
-
-    def test_game_download_exceptions_precede_platform_proxy_rules(self):
-        steam_index = self.sources["Steam.list"][0]
-        self.assertLess(self.sources["SteamCN.list"][0], steam_index)
-        self.assertLess(self.sources["GameDownload.list"][0], steam_index)
-        self.assertLess(self.sources["GameDownload.list"][0], self.sources["Epic.list"][0])
-        for rule in ("DIRECT,[]DOMAIN-SUFFIX,steamserver.net",
-                     "DIRECT,[]DOMAIN,steampipe.akamaized.net"):
-            self.assertIn(rule, self.rules)
-            self.assertLess(self.rules.index(rule), steam_index)
-        for source, kind, domains in (
-            ("Epic.list", "DOMAIN", EPIC_DOWNLOAD_DOMAINS),
-            ("Sony.list", "DOMAIN", SONY_DOWNLOAD_DOMAINS),
-            ("Sony.list", "DOMAIN-SUFFIX", SONY_DOWNLOAD_SUFFIXES),
-        ):
-            for domain in domains:
-                with self.subTest(source=source, domain=domain):
-                    rule = f"DIRECT,[]{kind},{domain}"
-                    self.assertIn(rule, self.rules)
-                    self.assertLess(self.rules.index(rule), self.sources[source][0])
-        for domain in ("steampowered.com", "steamcommunity.com", "epicgames.com",
-                       "unrealengine.com", "playstation.com", "playstation.net", "sony.com"):
-            with self.subTest(domain=domain):
-                self.assertNotIn(f"DIRECT,[]DOMAIN-SUFFIX,{domain}", self.rules)
-        first_general = min(self.sources[source][0] for source in
-                            ("Developer.list", "ProxyMedia.list", "ProxyGFWlist.list"))
-        for source in ("Steam.list", "Epic.list", "Sony.list", "GoogleFCM.list"):
-            self.assertLess(self.sources[source][0], first_general)
-
-    def test_reused_download_data_has_its_license_notice(self):
-        notice = (ROOT / "规则数据许可.txt").read_text(encoding="utf-8")
-        for text in ("MIT License", "Copyright (c) 2017 UK LAN Techs",
-                     "uklans/cache-domains/blob/master/epicgames.txt",
-                     "uklans/cache-domains/blob/master/sony.txt"):
-            self.assertIn(text, notice)
-
-    def test_jd_and_ad_unban_domains_are_direct_before_proxy_and_ad_rules(self):
-        first_non_direct = next(index for index, rule in enumerate(self.rules)
-                                if not rule.startswith("DIRECT,"))
-        for domain in JD_DOMAINS:
-            with self.subTest(domain=domain):
-                rule = f"DIRECT,[]DOMAIN-SUFFIX,{domain}"
-                self.assertIn(rule, self.rules)
-                self.assertLess(self.rules.index(rule), first_non_direct)
-        for rule in AD_UNBAN_RULES:
-            with self.subTest(rule=rule):
-                self.assertIn(rule, self.rules)
-                self.assertLess(self.rules.index(rule), first_non_direct)
-
-    def test_domestic_domain_rules_precede_broad_overseas_rules(self):
-        first_broad = min(self.sources[source][0] for source in
-                          ("Developer.list", "ProxyMedia.list", "ProxyGFWlist.list"))
-        for source in ("BilibiliHMT.list", "Bilibili.list", "NetEaseMusic.list",
-                       "ChinaMedia.list", "ChinaDomain.list", "GoogleCN.list",
-                       "CN.list", "PublicDirectCDN.list", "AccelerateDirectSites.list",
-                       "ByteDance.list", "Alibaba.list", "China.list"):
-            with self.subTest(source=source):
-                self.assertLess(self.sources[source][0], first_broad)
-
-    def test_ad_rules_use_classical_sources_and_builtin_reject(self):
-        ad_rules = [rule for rule in self.rules if rule.startswith("REJECT,")]
-        self.assertEqual(ad_rules, [
-            "REJECT,https://cdn.jsdelivr.net/gh/ACL4SSR/ACL4SSR@master/Clash/BanAD.list",
-            "REJECT,https://cdn.jsdelivr.net/gh/ACL4SSR/ACL4SSR@master/Clash/BanProgramAD.list",
-            "REJECT,https://cdn.jsdelivr.net/gh/ACL4SSR/ACL4SSR@master/Clash/BanEasyListChina.list",
-        ])
-        self.assertNotIn("REIJI007/AdBlock_Rule_For_Clash", "\n".join(self.rules))
-        self.assertLess(self.rules.index(ad_rules[-1]),
-                        next(index for index, rule in enumerate(self.rules)
-                             if rule.startswith("🤖 AI服务,")))
-
-    def test_google_direct_exceptions_precede_general_proxy_rules(self):
-        proxy_ip = self.sources["GoogleCNProxyIP.list"][0]
-        direct = self.sources["GoogleCN.list"][0]
-        general = self.sources["ProxyGFWlist.list"][0]
-        self.assertEqual(self.sources["GoogleCN.list"][1], "DIRECT")
-        self.assertLess(proxy_ip, direct)
-        self.assertLess(direct, general)
-        for domain in ("xn--ngstr-lra8j.com", "services.googleapis.cn"):
-            rule = f"🐟 漏网之鱼,[]DOMAIN-SUFFIX,{domain}"
-            self.assertIn(rule, self.rules)
-            self.assertLess(self.rules.index(rule), direct)
-
-    def test_specific_media_rules_precede_general_media_rules(self):
-        general = self.sources["ProxyMedia.list"][0]
-        for source in ("YouTube.list", "TikTok.list", "Netflix.list", "Bahamut.list"):
-            with self.subTest(source=source):
-                self.assertLess(self.sources[source][0], general)
-
-    def test_ai_rules_are_deduplicated_contiguous_and_before_other_services(self):
-        ai_rules = [rule for rule in self.rules if rule.startswith("🤖 AI服务,")]
-        expected = [
-            "🤖 AI服务,https://cdn.jsdelivr.net/gh/blackmatrix7/ios_rule_script@master/rule/Clash/OpenAI/OpenAI.list",
-            "🤖 AI服务,https://cdn.jsdelivr.net/gh/blackmatrix7/ios_rule_script@master/rule/Clash/Claude/Claude.list",
-            "🤖 AI服务,[]DOMAIN,aistudio.google.com",
-            "🤖 AI服务,[]DOMAIN,makersuite.google.com",
-            "🤖 AI服务,[]DOMAIN,gemini.google.com",
-            "🤖 AI服务,[]DOMAIN,generativelanguage.googleapis.com",
-            "🤖 AI服务,[]DOMAIN,api.githubcopilot.com",
-            "🤖 AI服务,[]DOMAIN,copilot-proxy.githubusercontent.com",
-            "🤖 AI服务,[]DOMAIN,copilot.microsoft.com",
-            "🤖 AI服务,[]DOMAIN,sydney.bing.com",
-            "🤖 AI服务,[]DOMAIN-SUFFIX,perplexity.ai",
-            "🤖 AI服务,[]DOMAIN-SUFFIX,x.ai",
-            "🤖 AI服务,[]DOMAIN-SUFFIX,grok.com",
-        ]
-        self.assertEqual(ai_rules, expected)
-        ai_indices = [index for index, rule in enumerate(self.rules)
-                      if rule.startswith("🤖 AI服务,")]
-        self.assertEqual(ai_indices, list(range(ai_indices[0], ai_indices[0] + len(ai_rules))))
-        for source in ("YouTube.list", "TikTok.list", "Netflix.list", "ProxyMedia.list",
-                       "OneDrive.list", "Microsoft.list", "Telegram.list"):
-            with self.subTest(source=source):
-                self.assertLess(ai_indices[-1], self.sources[source][0])
-
-    def test_ai_rules_do_not_capture_shared_infrastructure(self):
-        ai_rules = "\n".join(rule for rule in self.rules if rule.startswith("🤖 AI服务,"))
-        for forbidden in (
-            "challenges.cloudflare.com", "ACL4SSR/ACL4SSR@master/Clash/Ruleset/AI.list",
-            "rule/Clash/Gemini/Gemini.list", "rule/Clash/Copilot/Copilot.list",
-            "[]DOMAIN-SUFFIX,auth0.com", "[]DOMAIN-SUFFIX,stripe.com",
-            "[]DOMAIN,www.bing.com", "[]DOMAIN,apis.google.com",
-            "[]DOMAIN-KEYWORD,generativelanguage",
-        ):
-            with self.subTest(forbidden=forbidden):
-                self.assertNotIn(forbidden, ai_rules)
-
-    def test_cloudflare_challenge_resources_use_the_default_outbound_before_media(self):
-        rule = "🐟 漏网之鱼,[]DOMAIN-SUFFIX,challenges.cloudflare.com"
-        challenge_rules = [item for item in self.rules if "challenges.cloudflare.com" in item]
-        self.assertEqual(challenge_rules, [rule])
-        self.assertLess(self.rules.index(rule), self.sources["ProxyMedia.list"][0])
-
-    def test_ai_core_domains_are_explicitly_covered(self):
-        required = {
-            "aistudio.google.com": "DOMAIN",
-            "makersuite.google.com": "DOMAIN",
-            "gemini.google.com": "DOMAIN",
-            "generativelanguage.googleapis.com": "DOMAIN",
-            "api.githubcopilot.com": "DOMAIN",
-            "copilot-proxy.githubusercontent.com": "DOMAIN",
-            "copilot.microsoft.com": "DOMAIN",
-            "sydney.bing.com": "DOMAIN",
-            "perplexity.ai": "DOMAIN-SUFFIX",
-            "x.ai": "DOMAIN-SUFFIX",
-            "grok.com": "DOMAIN-SUFFIX",
-        }
-        for domain, rtype in required.items():
-            with self.subTest(domain=domain):
-                self.assertIn(f"🤖 AI服务,[]{rtype},{domain}", self.rules)
-
-    def test_rule_generation_stays_enabled(self):
+    def test_rules_fit_default_subconverter_ruleset_limit(self):
+        self.assertLessEqual(len(self.entries), 64)
+        self.assertEqual(len(self.entries), len({(r.target, r.body) for r in self.entries}))
+        for rule in self.entries:
+            self.assertIn(rule.target, set(self.groups) | BUILTINS)
+        self.assertEqual(self.entries[-1].body, "[]FINAL")
+        self.assertEqual(sum(r.body == "[]FINAL" for r in self.entries), 1)
         self.assertIn("enable_rule_generator=true", self.lines)
         self.assertIn("overwrite_original_rules=true", self.lines)
 
-    @unittest.skipUnless(MIHOMO_BIN, "Set MIHOMO_BIN for offline kernel validation")
-    def test_mihomo_accepts_credential_free_group_projection(self):
-        projected = []
-        for name, group in self.groups.items():
-            item = {"name": name, "type": group["type"], "proxies": candidates(group)}
-            if group["health"]:
-                interval, _, tolerance = group["health"][1].split(",")
-                item.update(url=group["health"][0], interval=int(interval), tolerance=int(tolerance))
-            projected.append(item)
-        config = {
-            "mode": "rule",
-            "log-level": "warning",
-            "proxies": [{"name": name, "type": "http", "server": "127.0.0.1", "port": 9}
-                        for name in NODES],
-            "proxy-groups": projected,
-            "rules": ["MATCH,🐟 漏网之鱼"],
+    def test_remote_sources_have_expected_business_targets(self):
+        targets = {
+            "YouTube.list": "📹 油管视频", "TikTok.list": "🎵 TikTok",
+            "Netflix.list": "🎥 奈飞视频", "Bahamut.list": "🌍 国外媒体",
+            "OneDrive.list": "Ⓜ️ 微软服务", "Microsoft.list": "Ⓜ️ 微软服务",
+            "Telegram.list": "📲 电报消息", "Crypto.list": "🪙 加密与支付",
+            "Binance.list": "🪙 加密与支付", "PayPal.list": "🪙 加密与支付",
+            "Developer.list": "💬 社区论坛", "ProxyMedia.list": "🌍 国外媒体",
+            "ProxyGFWlist.list": "🐟 漏网之鱼", "GoogleCNProxyIP.list": "🐟 漏网之鱼",
+            "Epic.list": "🐟 漏网之鱼", "Sony.list": "🐟 漏网之鱼",
+            "Steam.list": "🐟 漏网之鱼", "GoogleFCM.list": "🐟 漏网之鱼",
         }
-        # Windows argv caps near 32KB, so pass the projection as a UTF-8 file.
-        with tempfile.TemporaryDirectory(prefix="proxy-ini-check-") as directory:
-            config_path = os.path.join(directory, "config.json")
-            with open(config_path, "w", encoding="utf-8") as handle:
-                handle.write(json.dumps(config, ensure_ascii=False))
-            result = subprocess.run(
-                [MIHOMO_BIN, "-t", "-d", directory, "-f", config_path],
-                capture_output=True, encoding="utf-8", errors="replace", timeout=30,
-            )
+        for name, rule in self.sources.items():
+            self.assertEqual(rule.target, targets.get(name, "DIRECT") if not name.startswith("Ban") else "REJECT")
+        bodies = [r.body for r in self.entries if r.body.startswith("https://")]
+        self.assertEqual(len(bodies), len(set(bodies)))
+
+    def test_ai_products_have_domain_coverage_before_microsoft(self):
+        for host in AI_DOMAINS:
+            with self.subTest(host=host):
+                hit = first_domain_match(self.inline, host)
+                self.assertEqual(hit.target, "🤖 AI服务")
+                self.assertLess(hit.line, self.sources["Microsoft.list"].line)
+        for source in ("OpenAI.list", "OpenAi.list", "Claude.list", "China.list"):
+            self.assertNotIn(source, self.sources)
+
+    def test_ai_rules_do_not_capture_shared_services_or_lookalikes(self):
+        for host in (*SHARED_DOMAINS, "openai.com.example.net", "notchatgpt.com",
+                     "api.githubcopilot.com.example.org", "claude.ai.example.net"):
+            with self.subTest(host=host):
+                self.assertNotEqual(first_domain_match(self.inline, host).target, "🤖 AI服务")
+
+    def test_merged_regexes_preserve_domain_boundaries(self):
+        for rule in self.inline:
+            if rule.kind == "DOMAIN-REGEX":
+                pattern = rule.body.split(",", 1)[1]
+                re.compile(pattern)
+                self.assertTrue(pattern.endswith("$"))
+                self.assertTrue(pattern.startswith(("^", "(^|\\.)")))
+        for host in ("notnodeseek.com", "nodeseek.com.example.org", "notbytick.com",
+                     "bybit.eu.example.net", "notdeepseek.com", "mimg.126.net.example.org"):
+            self.assertEqual(first_domain_match(self.inline, host).kind, "FINAL")
+
+    def test_forums_and_regional_payment_domains_have_explicit_groups(self):
+        for host in FORUM_DOMAINS:
+            self.assertEqual(first_domain_match(self.inline, host).target, "💬 社区论坛", host)
+        for host in ("bytick.com", "bycsi.com", "api.bybit.kz", "stream.bybit.kz",
+                     "api.bybit.eu", "stream.bybit.eu", "api.bybit.nl", "api.bybit.tr",
+                     "api.bybit.ae", "api.bybit.id", "api.bybitgeorgia.ge", "api.manepa.jp",
+                     "stream.manepa.jp", "api.spark-fintech.com", "api.bybit-tr.com",
+                     "bitget.com", "htx.com", "www.wise.com", "api.transferwise.com",
+                     "api.sandbox.transferwise.tech", "revolut.com", "airwallex.com",
+                     "redotpay.com", "dupay.one", "onekey.so", "pokepay.cc", "hyperliquid.xyz"):
+            hit = first_domain_match(self.inline, host)
+            self.assertEqual(hit.target, "🪙 加密与支付", host)
+            self.assertLess(hit.line, self.sources["CN.list"].line)
+        for host in ("api.bybit.kz", "stream.bybit.eu", "api.business.githubcopilot.com"):
+            self.assertNotEqual(first_domain_match(self.inline, host).target, "🐟 漏网之鱼")
+
+    def test_business_whitelist_is_narrow_and_ad_hosts_are_not_bypassed(self):
+        first_ad = min(self.sources[name].line for name in
+                       ("BanAD.list", "BanProgramAD.list", "BanEasyListChina.list"))
+        early = [r for r in self.inline if r.line < first_ad]
+        for host in AD_DOMAINS:
+            self.assertFalse(any(r.matches_domain(host) for r in early), host)
+        for host in ("policy.jd.com", "mimg.126.net", "wxsnsdy.wxs.qq.com", "openxlab.org.cn"):
+            self.assertTrue(any(r.matches_domain(host) and r.target == "DIRECT" for r in early), host)
+        for host in ("jd.com", "g.click.taobao.com", "act.qq.com"):
+            self.assertFalse(any(r.matches_domain(host) for r in early), host)
+
+    def test_direct_supplement_precedes_general_proxy_lists(self):
+        general = min(self.sources[name].line for name in
+                      ("Developer.list", "ProxyMedia.list", "ProxyGFWlist.list"))
+        for host in ("deepseek.com", "kimi.com", "goofish.com", "pddpic.com", "mihoyo.com",
+                     "unionpay.com", "ke.com", "dewu.com", "zto.com", "papegames.com"):
+            hit = first_domain_match(self.inline, host)
+            self.assertEqual(hit.target, "DIRECT", host)
+            self.assertLess(hit.line, general)
+        for name in ("CN.list", "ByteDance.list", "Alibaba.list", "ChinaDomain.list"):
+            self.assertLess(self.sources[name].line, general)
+
+    def test_overseas_exceptions_precede_direct_sources(self):
+        for host in OVERSEAS_EXCEPTIONS:
+            hit = first_domain_match(self.inline, host)
+            self.assertEqual(hit.target, "🐟 漏网之鱼", host)
+            self.assertLess(hit.line, self.sources["CN.list"].line)
+        self.assertLess(self.sources["GoogleCNProxyIP.list"].line, self.sources["GoogleCN.list"].line)
+
+    def test_dns_lookup_is_deferred_until_final_china_geoip(self):
+        self.assertIn("DIRECT,[]IP-CIDR,5.5.5.5/32,no-resolve",
+                      [r.target + ",[]" + r.body for r in self.inline])
+        geoip = next(r for r in self.inline if r.kind == "GEOIP")
+        self.assertEqual(geoip.body, "GEOIP,CN")
+        self.assertGreater(geoip.line, self.sources["ProxyGFWlist.list"].line)
+        for r in self.inline:
+            if r.kind in ("IP-CIDR", "IP-CIDR6"):
+                self.assertTrue(r.body.endswith(",no-resolve"))
+        self.assertEqual(self.sources["ChinaIpV6.list"].target, "DIRECT")
+
+    def test_game_downloads_keep_exact_hosts_and_suffix_semantics(self):
+        for source in ("SteamCN.list", "GameDownload.list"):
+            self.assertLess(self.sources[source].line, self.sources["Steam.list"].line)
+        for host in (*EPIC_DOWNLOAD_DOMAINS, *SONY_DOWNLOAD_DOMAINS):
+            hit = first_domain_match(self.inline, host)
+            self.assertEqual(hit.target, "DIRECT", host)
+            self.assertLess(hit.line, self.sources["Epic.list"].line)
+            self.assertLess(hit.line, self.sources["Microsoft.list"].line)
+            self.assertNotEqual(first_domain_match(self.inline, "other." + host).target, "DIRECT", host)
+        for host in ("steamserver.net", *SONY_DOWNLOAD_SUFFIXES):
+            self.assertEqual(first_domain_match(self.inline, "cdn." + host).target, "DIRECT")
+        for host in ("steamcommunity.com", "epicgames.com", "playstation.net", "unrealengine.com"):
+            self.assertNotEqual(first_domain_match(self.inline, host).target, "DIRECT")
+        notice = (ROOT / "规则数据许可.txt").read_text(encoding="utf-8")
+        self.assertIn("Copyright (c) 2017 UK LAN Techs", notice)
+
+    def test_remote_parser_rejects_missing_snapshots_and_reports_dropped_types(self):
+        entry = Rule("🤖 AI服务", "https://example.invalid/rules.list", "proxy.ini", 1)
+        with self.assertRaises(KeyError):
+            expand_rules([entry], {})
+        text = "# synthetic parser fixture\nDOMAIN,api.example.org\nIP-ASN,20473,no-resolve\n"
+        rules, dropped = expand_rules([entry], {entry.body: text})
+        self.assertEqual([r.kind for r in rules], ["DOMAIN"])
+        self.assertEqual([r.kind for r in dropped], ["IP-ASN"])
+        self.assertEqual(render_rule(rules[0]), "DOMAIN,api.example.org,🤖 AI服务")
+
+    @unittest.skipUnless(MIHOMO_BIN, "Set MIHOMO_BIN to validate all inline rule syntax")
+    def test_mihomo_accepts_groups_and_all_inline_rules(self):
+        with tempfile.TemporaryDirectory(prefix="proxy-inline-check-") as directory:
+            path = Path(directory) / "config.json"
+            path.write_text(json.dumps(projection(self.groups, self.inline), ensure_ascii=False), encoding="utf-8")
+            result = subprocess.run([MIHOMO_BIN, "-t", "-d", directory, "-f", str(path)],
+                                    capture_output=True, encoding="utf-8", errors="replace", timeout=45)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
 
