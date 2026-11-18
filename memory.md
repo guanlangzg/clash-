@@ -16,7 +16,7 @@
 - 本项目目标是 **Subconverter v0.9.0 + Mihomo（Clash.Meta）**，不是旧版 Clash 通用配置。默认 TOML 的 `max_allowed_rulesets=64` 计算每一条 `ruleset=`，含 `[]` 内联；远程 URL 数量不能代替该计数。规则扩展后还受独立 `max_allowed_rules` 限制（编译默认 32768，具体取决于后端配置）。
 - 同策略域名例外使用内联 `[]DOMAIN-REGEX` 合并，后缀语义用 `(^|\.)(a\.com|b\.com)$`，精确主机用 `^(a\.com|b\.com)$`。必须保留起止边界与转义点，不用宽泛关键词省事。
 - Subconverter 内联路径直接透传正则；远程 Surge 列表中的 DOMAIN-REGEX、IP-ASN、URL-REGEX 会被 v0.9.0 的目标类型过滤。PROCESS-NAME、IP-CIDR6 支持，但进程规则受真实平台与接管方式影响。
-- 正则不能含逗号（转换器按逗号切字段），也不要使用会被 INI 解码的字面 `\n` / `\r` / `\t`、换行、注释或尾随空格。现有规则仅用点、括号、或、边界构造。
+- 正则不能含逗号（转换器按逗号切字段），也不要使用会被 INI 解码的字面 `\n` / `\r` / `\t`、换行、注释或尾随空格。仅用 `a-z0-9-.()|^$\` 构造，不使用可能触发 `yaml-cpp` 引号包裹的 `[`、`]`、`*`、`?`。
 - 原始列表可能包含重复项或不受支持类型，不能将原文条数当作最终 YAML 条数；转换后应比较完整规则序列和末尾 MATCH，防止静默截断。
 
 **Why:** v0.9.0 `src/handler/settings.cpp:1246-1257` 检查全部外部 ruleset 数量；`ruleconvert.cpp:220-244` 区分内联透传与远程类型过滤；Mihomo `rules/parser.go` 与 `rules/common/domain_regex.go` 支持正则。
@@ -26,7 +26,9 @@
 ## 3. 业务分流与广告边界
 
 - 规则按最终生成顺序首命中。基础局域网与必要精确白名单 → 广告 → AI → 视频 → 国内媒体/Apple → 游戏下载例外 → 微软与平台/FCM → 电报/支付/论坛及 Google 海外例外 → 国内域名集合 → 开发者/媒体/GFW → 下载与国内 IP → FINAL。微软源的 akadns.net 属共享 CDN，必须晚于 Sony 等确定性下载主机例外。
-- **AI 规则自维护专用域**：不再整份引入 BM7 OpenAI/Claude 或 ACL4SSR OpenAi/AI。OpenAI 列表实际含 `auth0.com`、`stripe.com`、共享遥测与云服务 ASN 20473；检查本地 INI URL 字符串无法发现这些污染。Copilot 必须覆盖 `githubcopilot.com` 全子域及明确专用主机，不能只匹配 `api.githubcopilot.com`。
+- **AI 规则自维护专用域**：不再整份引入 BM7 OpenAI/Claude/Gemini 或 ACL4SSR OpenAi/AI。OpenAI 列表实际含 `auth0.com`、`stripe.com`、共享遥测与云服务 ASN 20473；BM7 Gemini 含共享 `apis.google.com` 与宽泛 `colab` / `developerprofiles` 关键词；检查本地 INI URL 字符串无法发现这些污染。
+  - **Google AI 与 Antigravity 防漏及边界**：不能仅列前台主域，须同步覆盖真实 RPC/WebChannel/区域检测接口（AI Studio 的 `alkalimakersuite-pa` / `alkalicore-pa` / `webchannel-alkalimakersuite-pa` / `alkalimakersuiteapplets.pa`、Gemini 的 `proactivebackend-pa` / `robinfrontend-pa` / `geller-pa` / `geminiweb-pa` / `appsgenaiserver-pa` / `aisandbox-pa`、NotebookLM 的 `notebooklm-pa` / `labstailwind`、Jules、Labs/Flow、Opal、Stitch），否则命中后段 `ProxyGFWlist.list`（`DOMAIN-KEYWORD,google` → `🐟 漏网之鱼`，默认自动选低延迟香港节点）会触发锁区。Antigravity（App / IDE / CLI `agy` / `language_server`）须覆盖自有域 `antigravity.google(.com)`、`antigravity-unleash.goog`、Cloud Run 更新器 `antigravity(-cli|-ide|-hub|-app)-auto-updater-974169037036.us-central1.run.app`，后端 `antigravity(-pa).googleapis.com`、`cloudcode-pa`（含 `daily-` / `preprod-daily-` / `autopush-` 及 `.sandbox`，发行版与远程模式会直连 `daily-cloudcode-pa`）、`cloudaicompanion`、`aicode`、`aida`，以及企业版官方白名单 `businessaicode`、`aiplatform`、`discoveryengine`（含全局/区域/mTLS/`.rep`）。不将通用 Google 域（`accounts.google.com`、`oauth2.googleapis.com`、`apis.google.com`、`play.googleapis.com`、`waa-pa.clients6.google.com`、`www.gstatic.com`）、共享 `*-apt.pkg.dev` / `open-vsx.org`、宽泛 `.*-pa.googleapis.com` 或 `PROCESS-NAME,Antigravity.exe`（会劫持内置浏览器与包管理流量）并入 AI。桌面端 Go 子进程 `language_server` / `agy` 仍依赖客户端 TUN 或显式 `HTTPS_PROXY` 接管，且机房 IP 送中/风控与 Google 账号归属地独立于域名分流。
+  - **其他主流 AI 覆盖与防截留**：Copilot 覆盖 `githubcopilot.com` 全子域、`copilot(.cloud).microsoft(.com)`、`copilot.com` 及专用主机；同步覆盖 Cursor、Windsurf/Codeium、Claude（含 `claudeusercontent.com`、`clau.de`、`antspace.dev`）、OpenAI（含 `chat.com`、`ai.com`、`oaistatsig.com`、`chatgpt.livekit.cloud`）、xAI（含 `grok.x.com`，避免被 `x.com` 社区规则截留）与主流模型平台，防止被 `ProxyMedia.list` 截留至 `🌍 国外媒体` 或落入 `🐟 漏网之鱼`。
 - **广告先于普通国内直连**：京东、淘宝等整域放到广告之前会放行其广告/追踪子域。前置仅保留经确认需要的精确业务主机（例如 `policy.jd.com`）和正常静态资源；`openxlab.org.cn`、`openxmlformats.org` 是 `openx` 关键词的反例。正常国内业务 DIRECT、广告子域 REJECT 可以同时实现；同域正文与广告无法仅靠域名规则区分。
 - **国内集合不能按名称盲信**：BM7 China.list 含整个 `ms`、`in.th` 后缀，不能当作纯国内列表整份引入。使用已审查的 ACL4SSR 国内域名、公共 CDN 与加速列表，搭配字节/阿里集合及少量明确补充。Google 的 `services.googleapis.cn`、`xn--ngstr-lra8j.com`、GoogleCNProxyIP 代理例外须在 `.cn` / GoogleCN 之前。
 - **电报**：ACL4SSR Telegram 列表与 `core.telegram.org/resources/cidr.txt` 比较需覆盖整个 CIDR 边界，不只抽查一个 IP。补充网段与专用域指向电报组；兼容段不冒充官方 cidr.txt 原文。

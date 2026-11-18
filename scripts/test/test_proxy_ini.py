@@ -62,20 +62,78 @@ SONY_DOWNLOAD_DOMAINS = (
     "uef.np.dl.playstation.net", "vulcan.dl.playstation.net",
 )
 AI_DOMAINS = (
-    "chatgpt.com", "chat.openai.com", "api.openai.com", "cdn.oaistatic.com",
-    "files.oaiusercontent.com", "sora.com", "claude.ai", "api.anthropic.com",
-    "claude.com", "aistudio.google.com", "makersuite.google.com", "gemini.google.com",
-    "generativelanguage.googleapis.com", "api.githubcopilot.com",
-    "api.individual.githubcopilot.com", "api.business.githubcopilot.com",
-    "api.enterprise.githubcopilot.com", "copilot-proxy.githubusercontent.com",
-    "copilot.microsoft.com", "copilot.cloud.microsoft", "sydney.bing.com",
-    "www.perplexity.ai", "api.x.ai", "grok.com", "openai-api.arkoselabs.com",
+    # OpenAI / ChatGPT / Codex / Sora
+    "chatgpt.com", "chat.com", "ai.com", "chat.openai.com", "api.openai.com",
+    "cdn.oaistatic.com", "oaistatsig.com", "files.oaiusercontent.com", "sora.com",
+    "chatgpt.livekit.cloud", "chat.openai.com.cdn.cloudflare.net",
+    "openai-api.arkoselabs.com", "openaiassets.blob.core.windows.net", "cdn.openaimerge.com",
+    # Anthropic / Claude / Claude Code
+    "claude.ai", "api.anthropic.com", "claude.com", "claudeusercontent.com",
+    "clau.de", "antspace.dev",
+    # Google Gemini / AI Studio / DeepMind / Workspace AI
+    "gemini.google", "gemini.google.com", "bard.google.com", "gemini.gstatic.com",
+    "geminiweb-pa.clients.google.com", "geminiweb-pa.clients6.google.com",
+    "geminiweb-pa.googleapis.com", "aistudio.google.com", "makersuite.google.com",
+    "ai.studio", "ai.google.dev", "generativeai.google", "deepmind.com", "deepmind.google",
+    "generativelanguage.googleapis.com", "geller-pa.googleapis.com",
+    "proactivebackend-pa.googleapis.com", "proactivebackend-pa.clients6.google.com",
+    "robinfrontend-pa.googleapis.com", "alkalicore-pa.clients6.google.com",
+    "alkalimakersuite-pa.clients6.google.com", "alkalimakersuite-pa.googleapis.com",
+    "webchannel-alkalimakersuite-pa.clients6.google.com",
+    "alkalimakersuiteapplets.pa.googleapis.com", "makersuite-pa.clients6.google.com",
+    "appsgenaiserver-pa.clients.google.com", "appsgenaiserver-pa.clients6.google.com",
+    "appsgenaiserver-pa.googleapis.com", "aisandbox-pa.googleapis.com",
+    "chromemodelexecution-pa.googleapis.com",
+    # Google Antigravity / Gemini Code Assist / Cloud Code / Vertex AI
+    "antigravity.google", "docs.antigravity.google", "antigravity.google.com",
+    "antigravity-unleash.goog", "antigravity.googleapis.com", "antigravity-pa.googleapis.com",
+    "cloudcode-pa.googleapis.com", "daily-cloudcode-pa.googleapis.com",
+    "daily-cloudcode-pa.sandbox.googleapis.com",
+    "preprod-daily-cloudcode-pa.sandbox.googleapis.com",
+    "autopush-cloudcode-pa.sandbox.googleapis.com", "cloudaicompanion.googleapis.com",
+    "staging-cloudaicompanion.sandbox.googleapis.com", "aicode.googleapis.com",
+    "aida.googleapis.com", "autopush-aicode.sandbox.googleapis.com",
+    "businessaicode.googleapis.com", "businessaicode.us.rep.googleapis.com",
+    "businessaicode.eu.rep.googleapis.com", "businessaicode.mtls.googleapis.com",
+    "aiplatform.googleapis.com", "us-central1-aiplatform.googleapis.com",
+    "us-east5-aiplatform.googleapis.com", "aiplatform.us.rep.googleapis.com",
+    "aiplatform.eu.rep.googleapis.com", "aiplatform.mtls.googleapis.com",
+    "discoveryengine.googleapis.com", "us-discoveryengine.googleapis.com",
+    "eu-discoveryengine.mtls.googleapis.com",
+    "antigravity-auto-updater-974169037036.us-central1.run.app",
+    "antigravity-cli-auto-updater-974169037036.us-central1.run.app",
+    "antigravity-ide-auto-updater-974169037036.us-central1.run.app",
+    "antigravity-hub-auto-updater-974169037036.us-central1.run.app",
+    # NotebookLM / Jules / Labs / Flow / Opal / Stitch
+    "notebooklm.google", "notebooklm.google.com", "notebook.google", "notebook.google.com",
+    "notebooklm.cloud.google.com", "notebooklm.googleapis.com", "notebooklm-pa.googleapis.com",
+    "labstailwind.pa.googleapis.com", "jules.google", "jules.google.com",
+    "jules.googleapis.com", "labs.google", "labs.google.com", "flow.google", "flow.google.com",
+    "opal.google", "opal.google.com", "opal.goog", "opal.withgoogle.com",
+    "appcatalyst.pa.googleapis.com", "stitch.withgoogle.com", "aitestkitchen.withgoogle.com",
+    # Copilot / Cursor / Windsurf / Perplexity / xAI / Overseas AI Platforms
+    "api.githubcopilot.com", "api.individual.githubcopilot.com",
+    "api.business.githubcopilot.com", "api.enterprise.githubcopilot.com",
+    "copilot-proxy.githubusercontent.com", "copilotprodattachments.blob.core.windows.net",
+    "copilot.microsoft.com", "copilot.cloud.microsoft", "copilot.com", "sydney.bing.com",
+    "cursor.com", "api2.cursor.sh", "cursor-cdn.com", "cursorapi.com", "cursorvm.com",
+    "windsurf.com", "windsurf.build", "codeium.com", "codeiumdata.com",
+    "www.perplexity.ai", "perplexity.com", "pplx.ai",
+    "api.x.ai", "grok.com", "grok.x.com", "grokipedia.com", "grokusercontent.com",
+    "openrouter.ai", "api.groq.com", "mistral.ai", "cohere.com", "cohere.ai",
+    "poe.com", "dify.ai", "meta.ai", "api.jetbrains.ai", "cerebras.ai",
 )
 SHARED_DOMAINS = (
     "tenant.auth0.com", "checkout.stripe.com", "api.stripe.com", "sentry.io",
     "algolia.net", "static.cloudflareinsights.com", "intercom.io", "segment.io",
     "launchdarkly.com", "featuregates.org", "api.statsig.com", "identrust.com",
-    "challenges.cloudflare.com", "apis.google.com", "www.bing.com",
+    "challenges.cloudflare.com", "apis.google.com", "accounts.google.com",
+    "oauth2.googleapis.com", "www.googleapis.com", "storage.googleapis.com",
+    "play.googleapis.com", "waa-pa.clients6.google.com", "signaler-pa.clients6.google.com",
+    "people-pa.clients6.google.com", "translate-pa.googleapis.com", "www.gstatic.com",
+    "fonts.gstatic.com", "cloud.google.com", "console.cloud.google.com",
+    "us-central1-apt.pkg.dev", "other-service-974169037036.us-central1.run.app",
+    "livekit.cloud", "www.bing.com",
 )
 TELEGRAM_DOMAINS = (
     "t.me", "web.telegram.org", "telegram.me", "tdesktop.com", "telegra.ph",
@@ -357,15 +415,19 @@ class ProxyIniTests(unittest.TestCase):
 
     def test_ai_rules_do_not_capture_shared_services_or_lookalikes(self):
         for host in (*SHARED_DOMAINS, "openai.com.example.net", "notchatgpt.com",
-                     "api.githubcopilot.com.example.org", "claude.ai.example.net"):
+                     "api.githubcopilot.com.example.org", "claude.ai.example.net",
+                     "antigravity.google.example.org", "notgemini.google.com",
+                     "notcloudcode-pa.googleapis.com", "xai.com"):
             with self.subTest(host=host):
                 self.assertNotEqual(first_domain_match(self.inline, host).target, "🤖 AI服务")
 
     def test_merged_regexes_preserve_domain_boundaries(self):
+        allowed_chars = set("abcdefghijklmnopqrstuvwxyz0123456789-.()|^$\\")
         for rule in self.inline:
             if rule.kind == "DOMAIN-REGEX":
                 pattern = rule.body.split(",", 1)[1]
                 re.compile(pattern)
+                self.assertTrue(set(pattern).issubset(allowed_chars), pattern)
                 self.assertTrue(pattern.endswith("$"))
                 self.assertTrue(pattern.startswith(("^", "(^|\\.)")))
         for host in ("notnodeseek.com", "nodeseek.com.example.org", "notbytick.com",

@@ -66,7 +66,8 @@ def check_domains(rules):
                         "unrealengine.com", "playstation.net", "notnodeseek.com",
                         "nodeseek.com.example.org", "notbytick.com", "bybit.eu.example.net",
                         "notdeepseek.com", "mimg.126.net.example.org", "notchatgpt.com",
-                        "api.githubcopilot.com.example.org"),
+                        "api.githubcopilot.com.example.org", "antigravity.google.example.org",
+                        "notgemini.google.com", "notcloudcode-pa.googleapis.com", "xai.com"),
     }
     count = 0
     for target, hosts in cases.items():

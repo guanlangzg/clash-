@@ -314,7 +314,7 @@ Mihomo 支持对 HTTP、TLS（SNI）、QUIC 流量进行域名嗅探。当客户
   在本地运行 Subconverter 或构造转换参数时，若保留空的 `exclude_remarks=`，转换器会将其按空正则处理从而匹配并**排除所有节点**；需要禁用排除过滤时，应删除该配置项或填入不会命中正常名称的表达式。
 - **远程规则格式兼容性**：
   HTTP 返回 200 不代表内容可被正确导入。例如带 `payload:` 顶层键的 Clash YAML 规则集在未声明类型时，Subconverter 默认按 `surge` 行格式解析可能失效或产生异常规则。v0.9.0 远程输入的 IP-ASN、URL-REGEX、DOMAIN-REGEX 会被目标类型过滤；内联 `[]DOMAIN-REGEX` 则透传，由 Mihomo 解析。
-- **数量限制**：v0.9.0 默认 TOML 的 `max_allowed_rulesets=64` 统计每条 ruleset 指令（含内联）。当前通过同策略边界正则合并至 61 条；正则不得包含逗号或 INI 的 `\\n` / `\\r` / `\\t` 字面转义。展开总规则还受独立 `max_allowed_rules` 限制，必须确认最终 MATCH 保留并比较完整输出，不能只核对 URL 数量。
+- **数量限制**：v0.9.0 默认 TOML 的 `max_allowed_rulesets=64` 统计每条 ruleset 指令（含内联）。当前通过同策略边界正则合并至 62 条；正则不得包含逗号或 INI 的 `\\n` / `\\r` / `\\t` 字面转义，仅使用 `a-z0-9-.()|^$\` 避免 `yaml-cpp` 引号包裹。展开总规则还受独立 `max_allowed_rules` 限制，必须确认最终 MATCH 保留并比较完整输出，不能只核对 URL 数量。
 
 来源：
 
@@ -400,7 +400,7 @@ Mihomo 支持对 HTTP、TLS（SNI）、QUIC 流量进行域名嗅探。当客户
 
 ---
 
-## 11. 本项目 `proxy.ini` 当前架构与维护入口（2026-10-26）
+## 11. 本项目 `proxy.ini` 当前架构与维护入口（2026-11-18）
 
 ### 11.1 策略组
 
@@ -408,8 +408,8 @@ Mihomo 支持对 HTTP、TLS（SNI）、QUIC 流量进行域名嗅探。当客户
 
 ### 11.2 规则与验证
 
-- 61 条 ruleset 指令（含 41 个远程列表），兼容默认 64 条限制；部分同策略例外合并为 Mihomo DOMAIN-REGEX。只支持 Subconverter + Mihomo，不承诺旧 Clash 内核兼容。
-- AI 自有域与专用主机自维护，移除共享 Auth0/Stripe、遥测与云 ASN 污染；Copilot 覆盖个人/商业/企业子域。
+- 62 条 ruleset 指令（含 41 个远程列表），兼容默认 64 条限制；部分同策略例外合并为 Mihomo DOMAIN-REGEX。只支持 Subconverter + Mihomo，不承诺旧 Clash 内核兼容。
+- AI 自有域与专用主机自维护，移除共享 Auth0/Stripe、通用 Google 账号/API、遥测与云 ASN 污染；覆盖 Google Gemini / AI Studio / DeepMind / NotebookLM / Jules / Labs / Opal 的内部 `-pa` 接口，覆盖 Antigravity（自有域、Unleash、更新器、`cloudcode-pa` 含 daily/sandbox、`cloudaicompanion`、`aicode`/`aida` 及企业版 `businessaicode`/`aiplatform`/`discoveryengine` 官方端点），并覆盖 OpenAI、Claude、Copilot、Cursor、Windsurf、Perplexity、xAI（含 `grok.x.com`）等主流 AI 域。
 - 电商普通整域在广告之后直连；前置精确业务白名单与 OpenXLab 等关键词误伤例外。广告域指向 REJECT，不能承诺清除同域广告。
 - 社区、Bybit 地区 API/WS、Wise 旧域有明确例外；国内域名集合保留可用远程链接，移除含 ms/in.th 整后缀的 China.list，辅以国内应用/游戏/银行明确域名。
 - 末段国内 GEOIP 解析兜底与 ChinaIpV6，避免前置特殊 IP 规则触发全局 DNS 解析；效果受客户端 DNS 与接管影响。
